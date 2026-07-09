@@ -1,6 +1,8 @@
 # 🛰️ GaganDrishti: Swadeshi Satellite Trajectory Predictor
 
-A high-fidelity, real-time Swadeshi orbital tracking and trajectory prediction dashboard. Designed for satellite tracking enthusiasts, Indian space flight operators, and amateur radio operators, this full-stack application calculates and visualizes satellite pathways, relative look-angles, attitudes, and ground passes utilizing industry-standard **Two-Line Element (TLE)** sets and the **SGP4 orbital propagation** model.
+A high-fidelity, real-time Swadeshi orbital tracking and trajectory prediction dashboard. Designed for satellite tracking enthusiasts, Indian space flight operators, and amateur radio operators, this full-stack application calculates and visualizes satellite pathways, relative look-angles, attitudes, and ground passes utilizing industry-standard **Two-Line Element (TLE)** sets and the **SGP4 orbital propagation** model.  
+
+**Cooked to Perfection**
 
 ---
 

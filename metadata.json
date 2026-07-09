@@ -1,0 +1,6 @@
+{
+  "name": "GaganDrishti: Indian Satellite Tracker & Pass Predictor",
+  "description": "Predict Indian and international satellite trajectories, relative look-angles, attitudes, and ground passes over Indian and global tracking stations using SGP4 orbital mechanics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

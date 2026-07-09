@@ -1,0 +1,20 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  /* Indianizing the theme with a majestic Kesari (Saffron) and Marigold Gold cosmic palette */
+  --color-cyan-50: #fffaf0;
+  --color-cyan-100: #ffeed4;
+  --color-cyan-200: #ffd8a1;
+  --color-cyan-300: #ffbf6b;
+  --color-cyan-400: #ff9933; /* Majestic Saffron / Kesari */
+  --color-cyan-500: #f27b07; /* Darker Kesari */
+  --color-cyan-600: #cc5e00;
+  --color-cyan-700: #9e4300;
+  --color-cyan-800: #752e00;
+  --color-cyan-900: #4a1c00;
+  --color-cyan-950: #290e00;
+}

@@ -1,0 +1,738 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import TleInput from './components/TleInput';
+import WorldMap from './components/WorldMap';
+import SkyPlot from './components/SkyPlot';
+import OrientationVisualizer from './components/OrientationVisualizer';
+import { PassPredictor } from './components/PassPredictor';
+import { ObserverLocation, SatelliteState, TleInfo } from './types';
+import {
+  calculateSatelliteState,
+  generateGroundTrack,
+  parseTle,
+  calculateSensorFootprint,
+  SATELLITE_PRESETS
+} from './utils/satelliteCalc';
+import {
+  Play,
+  Pause,
+  RotateCcw,
+  Clock,
+  Compass,
+  Radio,
+  Sparkles,
+  MapPin,
+  Cpu,
+  Info,
+  Sun,
+  Moon,
+  TrendingDown,
+  TrendingUp,
+  FastForward,
+  Save
+} from 'lucide-react';
+
+const GROUND_STATION_PRESETS: ObserverLocation[] = [
+  { name: 'ISTRAC ISRO, Bengaluru', lat: 13.03, lon: 77.51, alt: 920 },
+  { name: 'SDSC-SHAR Spaceport, Sriharikota', lat: 13.72, lon: 80.23, alt: 10 },
+  { name: 'Space Applications Centre, Ahmedabad', lat: 23.03, lon: 72.51, alt: 55 },
+  { name: 'Bharati Antarctic Research Station, India', lat: -69.41, lon: 76.19, alt: 35 },
+  { name: 'VSSC Terminal, Thiruvananthapuram', lat: 8.53, lon: 76.87, alt: 5 }
+];
+
+export default function App() {
+  // TLE States (with localStorage restoration)
+  const [line1, setLine1] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('orbital_path_config');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.line1) return parsed.line1;
+      }
+    } catch (e) {
+      console.error('Failed to restore line1', e);
+    }
+    return '';
+  });
+
+  const [line2, setLine2] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('orbital_path_config');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.line2) return parsed.line2;
+      }
+    } catch (e) {
+      console.error('Failed to restore line2', e);
+    }
+    return '';
+  });
+
+  const [satName, setSatName] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('orbital_path_config');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.satName) return parsed.satName;
+      }
+    } catch (e) {
+      console.error('Failed to restore satName', e);
+    }
+    return 'AstroSat (ISRO Space Obs)';
+  });
+
+  // Selected Observer Location (starts at ISTRAC Bengaluru or loads from localStorage)
+  const [observer, setObserver] = useState<ObserverLocation>(() => {
+    try {
+      const saved = localStorage.getItem('orbital_path_config');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.observer) return parsed.observer;
+      }
+    } catch (e) {
+      console.error('Failed to restore observer location', e);
+    }
+    return GROUND_STATION_PRESETS[0];
+  });
+
+  const [isSavedJustNow, setIsSavedJustNow] = useState<boolean>(false);
+
+  const handleSaveConfig = () => {
+    try {
+      const config = {
+        line1,
+        line2,
+        satName,
+        observer
+      };
+      localStorage.setItem('orbital_path_config', JSON.stringify(config));
+      setIsSavedJustNow(true);
+      setTimeout(() => {
+        setIsSavedJustNow(false);
+      }, 3000);
+    } catch (err) {
+      console.error('Failed to save session configuration', err);
+    }
+  };
+
+  // Simulation parameters
+  const [time, setTime] = useState<Date>(new Date());
+  const [isPaused, setIsPaused] = useState<boolean>(false);
+  const [simSpeed, setSimSpeed] = useState<number>(1); // 1x, 10x, 60x, 300x, 1800x, 3600x
+
+  // Spacecraft Simulated Orientation offsets
+  const [pitch, setPitch] = useState<number>(0);
+  const [roll, setRoll] = useState<number>(0);
+  const [yaw, setYaw] = useState<number>(0);
+  const [sensorFov, setSensorFov] = useState<number>(12); // camera field of view half angle
+
+  // AI Mission briefing states
+  const [aiAnalysis, setAiAnalysis] = useState<string>('');
+  const [isAiLoading, setIsAiLoading] = useState<boolean>(false);
+
+  // Parse current active TLE
+  const activeTleInfo = useMemo(() => {
+    if (!line1 || !line2) return null;
+    try {
+      return parseTle(satName, line1, line2);
+    } catch {
+      return null;
+    }
+  }, [line1, line2, satName]);
+
+  // Handle TLE selection changes from TleInput component
+  const handleTleChange = (l1: string, l2: string, name: string) => {
+    setLine1(l1);
+    setLine2(l2);
+    setSatName(name);
+    // Reset AI analysis when satellite changes
+    setAiAnalysis('');
+  };
+
+  // Keep date updating when playing
+  useEffect(() => {
+    if (isPaused) return;
+
+    const interval = setInterval(() => {
+      setTime((prevTime) => {
+        // Increment time based on simulation speed (speed x 100ms update rate)
+        const msDelta = 100 * simSpeed;
+        return new Date(prevTime.getTime() + msDelta);
+      });
+    }, 100);
+
+    return () => clearInterval(interval);
+  }, [isPaused, simSpeed]);
+
+  // Synchronous calculation of dynamic satellite states
+  const satelliteState = useMemo<SatelliteState | null>(() => {
+    if (!line1 || !line2) return null;
+    return calculateSatelliteState(line1, line2, time, observer);
+  }, [line1, line2, time, observer]);
+
+  // Approximate relative radial velocity (range rate) using finite differences
+  // to calculate Doppler Shift
+  const dopplerData = useMemo(() => {
+    if (!line1 || !line2 || !satelliteState) return null;
+    
+    // Get state 1 second in the future to compute range delta
+    const futureTime = new Date(time.getTime() + 1000);
+    const futureState = calculateSatelliteState(line1, line2, futureTime, observer);
+    
+    if (!futureState) return null;
+
+    const rangeRate = futureState.range - satelliteState.range; // km/s (since delta t = 1s)
+    const SPEED_OF_LIGHT = 299792.458; // km/s
+    const dopplerFactor = 1.0 - (rangeRate / SPEED_OF_LIGHT);
+
+    // Standard VHF weather satellite transmission freq is usually 137 MHz
+    const testFreq = 137.0; // MHz
+    const shiftHz = (dopplerFactor - 1.0) * testFreq * 1000000; // Hz
+
+    return {
+      rangeRate, // positive = receding, negative = approaching
+      dopplerFactor,
+      shiftHz
+    };
+  }, [line1, line2, time, observer, satelliteState]);
+
+  // Compute Ground Track Line Coordinates
+  const groundTrack = useMemo(() => {
+    if (!line1 || !line2) return [];
+    return generateGroundTrack(line1, line2, time, 45, 90, 60);
+  }, [line1, line2, time]);
+
+  // Compute displaced Sensor Footprint
+  const sensorFootprint = useMemo(() => {
+    if (!satelliteState) return null;
+    return calculateSensorFootprint(
+      satelliteState.lat,
+      satelliteState.lon,
+      satelliteState.alt,
+      pitch,
+      roll,
+      sensorFov
+    );
+  }, [satelliteState, pitch, roll, sensorFov]);
+
+  // Request expert mission brief from Gemini API server-side
+  const handleRequestAiBrief = async () => {
+    if (!line1 || !line2 || !activeTleInfo) return;
+
+    setIsAiLoading(true);
+    setAiAnalysis('');
+
+    try {
+      const response = await fetch('/api/analyze-satellite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: satName,
+          tle1: line1,
+          tle2: line2,
+          inclination: activeTleInfo.inclination,
+          eccentricity: activeTleInfo.eccentricity,
+          meanMotion: activeTleInfo.meanMotion,
+          alt: satelliteState ? satelliteState.alt : 400
+        })
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        setAiAnalysis(data.analysis || 'No analysis available.');
+      } else {
+        setAiAnalysis(`Error: ${data.error || 'Failed to retrieve briefings.'}`);
+      }
+    } catch (err: any) {
+      setAiAnalysis(`Network error: ${err.message || err}`);
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
+
+  // Simple and highly robust custom renderer for Markdown text
+  const renderMarkdown = (md: string) => {
+    if (!md) return null;
+    return md.split('\n').map((line, idx) => {
+      let trimmed = line.trim();
+      
+      // Headers
+      if (trimmed.startsWith('###')) {
+        return (
+          <h4 key={idx} className="text-sm font-semibold text-cyan-300 font-mono mt-3 mb-1 uppercase tracking-wide">
+            {trimmed.replace('###', '').trim()}
+          </h4>
+        );
+      }
+      if (trimmed.startsWith('##')) {
+        return (
+          <h3 key={idx} className="text-base font-bold text-emerald-400 font-mono mt-4 mb-2 uppercase border-b border-slate-800 pb-1">
+            {trimmed.replace('##', '').trim()}
+          </h3>
+        );
+      }
+      if (trimmed.startsWith('#')) {
+        return (
+          <h2 key={idx} className="text-lg font-bold text-white font-mono mt-5 mb-3 border-b border-slate-700 pb-1.5">
+            {trimmed.replace('#', '').trim()}
+          </h2>
+        );
+      }
+
+      // Bullet items
+      if (trimmed.startsWith('-') || trimmed.startsWith('*')) {
+        const content = trimmed.substring(1).trim();
+        return (
+          <li key={idx} className="ml-4 list-disc text-slate-300 text-xs leading-relaxed mb-1">
+            {parseInlineStyles(content)}
+          </li>
+        );
+      }
+
+      // Standard paragraphs
+      if (trimmed.length === 0) return <div key={idx} className="h-2" />;
+
+      return (
+        <p key={idx} className="text-slate-300 text-xs leading-relaxed mb-2.5 font-sans">
+          {parseInlineStyles(trimmed)}
+        </p>
+      );
+    });
+  };
+
+  // Parse inline bolding (**text**) or inline code (`text`)
+  const parseInlineStyles = (text: string) => {
+    const parts = text.split(/(\*\*.*?\*\*|`.*?`)/g);
+    return parts.map((part, i) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return <strong key={i} className="text-emerald-300 font-semibold">{part.slice(2, -2)}</strong>;
+      }
+      if (part.startsWith('`') && part.endsWith('`')) {
+        return <code key={i} className="bg-slate-950 px-1.5 py-0.5 rounded text-[10px] text-cyan-400 font-mono border border-slate-800/60">{part.slice(1, -1)}</code>;
+      }
+      return part;
+    });
+  };
+
+  return (
+    <div className="min-h-screen bg-[#05060a] text-cyan-50 flex flex-col font-sans selection:bg-cyan-500/20 selection:text-cyan-300 relative">
+      <div className="absolute inset-0 opacity-5 pointer-events-none bg-[radial-gradient(#083344_1px,transparent_1px)] [background-size:20px_20px]"></div>
+      
+      {/* Dynamic Header Room */}
+      <header className="border-b border-cyan-900/40 bg-[#0a0c16]/80 backdrop-blur-md px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4 sticky top-0 z-20">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded bg-cyan-500 flex items-center justify-center shadow-[0_0_15px_rgba(6,182,212,0.5)]">
+            <Radio className="w-5 h-5 text-black animate-pulse" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold tracking-tight uppercase">
+              GAGAN<span className="text-cyan-400">DRISHTI</span>
+            </h1>
+            <p className="text-[10px] text-cyan-600 uppercase tracking-widest font-mono font-bold">
+              SWADESHI REAL-TIME ORBITAL TRACKER & GROUND PASS ANALYSIS
+            </p>
+          </div>
+        </div>
+
+        {/* Global Live Clock Room */}
+        <div className="flex flex-wrap items-center gap-6">
+          <div className="text-right">
+            <div className="text-[10px] text-cyan-600 uppercase tracking-widest font-bold font-mono">System Status</div>
+            <div className="text-xs font-mono text-cyan-400">ALL SYSTEMS NOMINAL</div>
+          </div>
+          <div className="h-8 w-[1px] bg-cyan-900/50 hidden md:block"></div>
+          <div className="text-right">
+            <div className="text-[10px] text-cyan-600 uppercase tracking-widest font-bold font-mono">Epoch UTC</div>
+            <div className="text-xs font-mono text-cyan-200">
+              {time.toISOString().replace('T', ' ').substring(0, 19)}
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Control Board Container */}
+      <main className="flex-1 p-4 md:p-6 space-y-6 max-w-7xl mx-auto w-full relative z-10">
+        
+        {/* Simulation Controls & Station Selector */}
+        <section className="bg-[#0a0c16] border border-cyan-900/30 rounded-xl p-5 flex flex-col lg:flex-row justify-between gap-4 shadow-[0_0_20px_rgba(6,182,212,0.05)]">
+          {/* Time playback */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => setIsPaused(!isPaused)}
+              className={`flex items-center gap-1.5 px-4 py-2 font-bold font-sans text-xs uppercase tracking-widest rounded shadow transition-all ${
+                isPaused
+                  ? 'bg-cyan-600 hover:bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.3)]'
+                  : 'bg-amber-600 hover:bg-amber-500 text-white shadow-[0_0_15px_rgba(245,158,11,0.3)]'
+              }`}
+            >
+              {isPaused ? <Play className="w-3.5 h-3.5" /> : <Pause className="w-3.5 h-3.5" />}
+              {isPaused ? 'RESUME SIM' : 'PAUSE TRACKING'}
+            </button>
+
+            <button
+              onClick={() => {
+                setTime(new Date());
+                setIsPaused(false);
+              }}
+              className="flex items-center gap-1.5 px-4 py-2 rounded bg-cyan-950/30 border border-cyan-800/50 text-cyan-300 hover:bg-cyan-900/30 text-xs font-mono shadow transition-all"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              SYNC CURRENT
+            </button>
+
+            <button
+              onClick={handleSaveConfig}
+              title="Save current TLE satellite and station coordinates to browser localStorage"
+              className={`flex items-center gap-1.5 px-4 py-2 rounded text-xs font-mono shadow transition-all duration-300 uppercase tracking-wider ${
+                isSavedJustNow
+                  ? 'bg-emerald-500 text-black border border-emerald-400 font-bold shadow-[0_0_20px_rgba(16,185,129,0.5)] animate-pulse'
+                  : 'bg-emerald-950/20 border border-emerald-800/50 text-emerald-400 hover:bg-emerald-500 hover:text-black hover:border-emerald-500'
+              }`}
+            >
+              <Save className="w-3.5 h-3.5" />
+              {isSavedJustNow ? 'SAVED OK' : 'SAVE SESSION'}
+            </button>
+
+            {/* Sim Speeds */}
+            <div className="flex items-center bg-[#05060a] p-1.5 rounded-md border border-cyan-900/30 ml-2">
+              <span className="text-[10px] uppercase font-bold text-cyan-600 font-mono px-2">WARP:</span>
+              {[1, 10, 60, 300, 1800, 3600].map((speed) => (
+                <button
+                  key={speed}
+                  onClick={() => setSimSpeed(speed)}
+                  className={`px-2 py-0.5 text-xs font-mono rounded ${
+                    simSpeed === speed
+                      ? 'bg-cyan-500/20 text-cyan-400 font-bold border border-cyan-500/30'
+                      : 'text-cyan-600 hover:text-cyan-300'
+                  }`}
+                >
+                  {speed}x
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Observer Location presets selector */}
+          <div className="flex items-center gap-3 flex-wrap lg:flex-nowrap">
+            <div className="flex items-center gap-1 text-xs font-mono text-cyan-500">
+              <MapPin className="w-4 h-4 text-cyan-400" />
+              <span>STATION:</span>
+            </div>
+            <select
+              value={observer.name}
+              onChange={(e) => {
+                const selected = GROUND_STATION_PRESETS.find((p) => p.name === e.target.value);
+                if (selected) setObserver(selected);
+              }}
+              className="bg-[#05060a] border border-cyan-800/50 text-xs font-mono text-cyan-100 rounded px-2.5 py-1.5 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/20"
+            >
+              <option value={observer.name} disabled className="text-cyan-600 font-semibold bg-[#05060a]">
+                {observer.name.startsWith('Custom') ? '📍 CUSTOM STATION COORDINATES' : '⚡ BHARATIYA GROUND STATION'}
+              </option>
+              {GROUND_STATION_PRESETS.map((p) => (
+                <option key={p.name} value={p.name} className="bg-[#05060a]">
+                  {p.name}
+                </option>
+              ))}
+            </select>
+
+            {/* Custom Coordinates Inputs */}
+            <div className="flex items-center gap-1.5 bg-[#05060a] border border-cyan-800/50 px-2.5 py-1 rounded">
+              <input
+                type="number"
+                step="0.01"
+                min="-90"
+                max="90"
+                value={observer.lat}
+                onChange={(e) =>
+                  setObserver({
+                    name: `Custom Location (${parseFloat(e.target.value)}°N, ${observer.lon}°E)`,
+                    lat: parseFloat(e.target.value) || 0,
+                    lon: observer.lon,
+                    alt: observer.alt
+                  })
+                }
+                className="w-14 bg-transparent text-cyan-100 text-xs font-mono text-center focus:outline-none focus:text-cyan-400"
+                placeholder="Lat"
+              />
+              <span className="text-cyan-800 font-mono text-xs">/</span>
+              <input
+                type="number"
+                step="0.01"
+                min="-180"
+                max="180"
+                value={observer.lon}
+                onChange={(e) =>
+                  setObserver({
+                    name: `Custom Location (${observer.lat}°N, ${parseFloat(e.target.value)}°E)`,
+                    lat: observer.lat,
+                    lon: parseFloat(e.target.value) || 0,
+                    alt: observer.alt
+                  })
+                }
+                className="w-14 bg-transparent text-cyan-100 text-xs font-mono text-center focus:outline-none focus:text-cyan-400"
+                placeholder="Lon"
+              />
+              <span className="text-[10px] text-cyan-600 font-mono">°</span>
+            </div>
+          </div>
+        </section>
+
+        {/* Live Map & Polar Radar Plot Section */}
+        <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* World map takes 2/3 of space */}
+          <div className="lg:col-span-2 h-full flex flex-col">
+            <WorldMap
+              satelliteState={satelliteState}
+              groundTrack={groundTrack}
+              observer={observer}
+              setObserver={setObserver}
+              sensorFootprint={sensorFootprint}
+            />
+          </div>
+
+          {/* Sky Radar Scope takes 1/3 */}
+          <div className="h-full">
+            <SkyPlot
+              satelliteState={satelliteState}
+              groundTrack={groundTrack}
+              observerLat={observer.lat}
+              observerLon={observer.lon}
+              observerAlt={observer.alt}
+              line1={line1}
+              line2={line2}
+            />
+          </div>
+        </section>
+
+        {/* Spacecraft Attitude / Orientation controls & Dynamic Telemetry Readout */}
+        <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          
+          {/* Telemetry Panel */}
+          <div className="bg-[#0a0c16] border border-cyan-900/30 rounded-xl overflow-hidden shadow-[0_0_20px_rgba(6,182,212,0.05)] flex flex-col h-full justify-between">
+            <div className="px-5 py-4 bg-[#0a0c16] border-b border-cyan-900/30 flex justify-between items-center">
+              <span className="font-mono text-xs font-semibold uppercase tracking-wider text-cyan-400 flex items-center gap-1.5">
+                <Compass className="w-4 h-4 text-cyan-500 animate-spin-slow" />
+                Live Telemetry Feed
+              </span>
+            </div>
+
+            <div className="p-4 space-y-3.5 flex-1 bg-[#05060a]/40">
+              
+              {/* Speed & Altitude */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-cyan-950/20 border border-cyan-900/20 rounded p-3 text-center">
+                  <span className="text-[10px] text-cyan-600 block font-mono uppercase font-bold">ALTITUDE</span>
+                  <span className="text-xl font-mono text-cyan-100 font-bold tracking-tight">
+                    {satelliteState ? `${satelliteState.alt.toFixed(1)}` : '--'}
+                  </span>
+                  <span className="text-[10px] text-cyan-400 font-mono ml-1">km</span>
+                </div>
+                <div className="bg-cyan-950/20 border border-cyan-900/20 rounded p-3 text-center">
+                  <span className="text-[10px] text-cyan-600 block font-mono uppercase font-bold">ORBITAL SPEED</span>
+                  <span className="text-xl font-mono text-cyan-100 font-bold tracking-tight">
+                    {satelliteState ? `${satelliteState.speed.toFixed(3)}` : '--'}
+                  </span>
+                  <span className="text-[10px] text-cyan-400 font-mono ml-1">km/s</span>
+                </div>
+              </div>
+
+              {/* Station relative coordinates */}
+              <div className="bg-cyan-950/20 border border-cyan-900/20 rounded p-3 space-y-2">
+                <span className="text-[10px] text-cyan-600 block font-mono uppercase font-bold">GROUND STATION REFERENCE</span>
+                
+                <div className="grid grid-cols-3 gap-1.5 text-center">
+                  <div className="bg-[#05060a] p-1.5 rounded border border-cyan-950">
+                    <span className="text-[8px] text-cyan-600 block font-mono font-semibold">AZIMUTH</span>
+                    <span className="font-mono text-xs text-cyan-300">
+                      {satelliteState ? `${satelliteState.azimuth.toFixed(1)}°` : '--'}
+                    </span>
+                  </div>
+                  <div className="bg-[#05060a] p-1.5 rounded border border-cyan-950">
+                    <span className="text-[8px] text-cyan-600 block font-mono font-semibold">ELEVATION</span>
+                    <span className={`font-mono text-xs ${satelliteState && satelliteState.elevation >= 0 ? 'text-teal-400 font-bold' : 'text-cyan-600'}`}>
+                      {satelliteState ? `${satelliteState.elevation.toFixed(1)}°` : '--'}
+                    </span>
+                  </div>
+                  <div className="bg-[#05060a] p-1.5 rounded border border-cyan-950">
+                    <span className="text-[8px] text-cyan-600 block font-mono font-semibold">RANGE</span>
+                    <span className="font-mono text-xs text-cyan-300">
+                      {satelliteState ? `${Math.round(satelliteState.range)}` : '--'}
+                      <span className="text-[8px] text-cyan-500 ml-0.5">km</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Doppler & RF Shift values */}
+              <div className="bg-cyan-950/20 border border-cyan-900/20 rounded p-3 flex justify-between items-center text-xs font-mono">
+                <div>
+                  <span className="text-[10px] text-cyan-600 block uppercase font-bold">RF DOPPLER SHIFT</span>
+                  {dopplerData ? (
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      {dopplerData.rangeRate < 0 ? (
+                        <TrendingDown className="w-3.5 h-3.5 text-teal-400" />
+                      ) : (
+                        <TrendingUp className="w-3.5 h-3.5 text-rose-500" />
+                      )}
+                      <span className={dopplerData.rangeRate < 0 ? 'text-teal-400' : 'text-rose-500'}>
+                        {dopplerData.shiftHz >= 0 ? '+' : ''}
+                        {(dopplerData.shiftHz / 1000).toFixed(2)} kHz
+                      </span>
+                    </div>
+                  ) : '--'}
+                </div>
+                <div className="text-right">
+                  <span className="text-[8px] text-cyan-600 block font-bold">DOPPLER FACTOR</span>
+                  <span className="text-cyan-300 text-xs font-mono">
+                    {dopplerData ? dopplerData.dopplerFactor.toFixed(8) : '--'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Sunlit / Shadow Eclipse status */}
+              <div className="bg-cyan-950/20 border border-cyan-900/20 rounded p-3 flex justify-between items-center text-xs font-mono">
+                <div>
+                  <span className="text-[10px] text-cyan-600 block uppercase font-bold">SUNLIT / ECLIPSE</span>
+                  <span className="text-cyan-300 font-semibold flex items-center gap-1 mt-0.5">
+                    {satelliteState ? (
+                      satelliteState.sunlit ? (
+                        <>
+                          <Sun className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+                          <span className="text-amber-400 font-bold">SUNLIT (DAYLIGHT)</span>
+                        </>
+                      ) : (
+                        <>
+                          <Moon className="w-3.5 h-3.5 text-cyan-400" />
+                          <span className="text-cyan-400 font-bold">ECLIPSE (EARTH SHADOW)</span>
+                        </>
+                      )
+                    ) : '--'}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[8px] text-cyan-600 block font-bold">OBSERVER STATUS</span>
+                  <span className={`text-[11px] font-bold ${satelliteState?.visible ? 'text-teal-400' : 'text-cyan-700'}`}>
+                    {satelliteState?.visible ? '📡 COMS ACQUIRED' : '❌ LOSS OF SIGNAL'}
+                  </span>
+                </div>
+              </div>
+
+            </div>
+
+            <div className="px-5 py-3 bg-[#0a0c16]/50 border-t border-cyan-900/30 text-[10px] font-mono text-cyan-600 flex justify-between items-center">
+              <span>NORAD ID: {activeTleInfo?.noradId || '--'}</span>
+              <span>Intl Desig: {activeTleInfo?.intlDesignator || '--'}</span>
+            </div>
+          </div>
+
+          {/* Orientation & Gyroscope visualizer takes remaining 2/3 */}
+          <div className="lg:col-span-2">
+            <OrientationVisualizer
+              satelliteState={satelliteState}
+              pitch={pitch}
+              setPitch={setPitch}
+              roll={roll}
+              setRoll={setRoll}
+              yaw={yaw}
+              setYaw={setYaw}
+              sensorFov={sensorFov}
+              setSensorFov={setSensorFov}
+              sensorFootprint={sensorFootprint}
+            />
+          </div>
+
+        </section>
+
+        {/* Pass Predictions Section */}
+        <section className="w-full">
+          <PassPredictor
+            line1={line1}
+            line2={line2}
+            satelliteName={activeTleInfo?.name || 'Satellite'}
+            observer={observer}
+            currentTime={time}
+            onSetTime={(date) => {
+              setTime(date);
+              setIsPaused(true); // Pause simulation to inspect specific pass state!
+            }}
+          />
+        </section>
+
+        {/* Config Inputs (TLE Presets) & AI Mission Briefing Panel */}
+        <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          
+          {/* TLE input & Keplerian parameter table */}
+          <div>
+            <TleInput
+              onTleChange={handleTleChange}
+              activeTleInfo={activeTleInfo}
+              line1={line1}
+              line2={line2}
+            />
+          </div>
+
+          {/* AI Mission briefing card (takes 2 columns) */}
+          <div className="lg:col-span-2 flex flex-col bg-[#0a0c16] border border-cyan-900/30 rounded-xl overflow-hidden shadow-[0_0_20px_rgba(6,182,212,0.05)] h-full justify-between">
+            <div className="px-5 py-4 bg-[#0a0c16] border-b border-cyan-900/30 flex justify-between items-center">
+              <span className="font-mono text-xs font-semibold uppercase tracking-wider text-cyan-400 flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-cyan-400" />
+                AI Antariksh Analysis & Insights
+              </span>
+              <button
+                onClick={handleRequestAiBrief}
+                disabled={isAiLoading || !line1 || !line2}
+                className="bg-cyan-600 hover:bg-cyan-500 text-black font-bold font-sans text-xs uppercase tracking-widest px-4 py-1.5 rounded transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)] disabled:bg-[#05060a] disabled:text-cyan-800 disabled:border-cyan-900/20 disabled:shadow-none border border-transparent flex items-center gap-1.5 cursor-pointer"
+              >
+                <Sparkles className="w-3 h-3" />
+                {isAiLoading ? 'DECRYPTING...' : 'DECODE KAKSHA (ORBIT)'}
+              </button>
+            </div>
+
+            {/* AI Text Display */}
+            <div className="p-5 flex-1 bg-[#05060a]/60 overflow-y-auto max-h-[350px] min-h-[250px]">
+              {isAiLoading ? (
+                /* Dynamic space-mission thematic loading screens */
+                <div className="flex flex-col items-center justify-center h-full text-center space-y-4 py-8">
+                  <div className="w-8 h-8 border-2 border-cyan-500/20 border-t-cyan-400 rounded-full animate-spin"></div>
+                  <div className="space-y-1 font-mono text-xs text-cyan-400">
+                    <p className="font-bold uppercase tracking-wider animate-pulse">Establishing Connection with ISTRAC Bengaluru...</p>
+                    <p className="text-[10px] text-cyan-600">Processing NORAD ID {activeTleInfo?.noradId || '--'} elements</p>
+                    <p className="text-[10px] text-cyan-600">Querying Swadeshi Gemini Spaceflight Intel systems</p>
+                  </div>
+                </div>
+              ) : aiAnalysis ? (
+                <div className="prose prose-invert max-w-none text-left">
+                  {renderMarkdown(aiAnalysis)}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-center py-8 text-cyan-600 font-mono text-xs space-y-2">
+                  <Info className="w-8 h-8 text-cyan-800" />
+                  <p>Request an expert astrophysical and operational intelligence analysis on the active satellite's orbital profile.</p>
+                  <p className="text-[10px] text-cyan-700 max-w-sm">
+                    Our AI parses the Keplerian coefficients to outline orbit properties, expected payloads, coverage swath, and visual viewing guidelines.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="px-5 py-3 bg-[#0a0c16]/50 border-t border-cyan-900/30 text-[9px] font-mono text-cyan-600 text-center">
+              Coefficients Decoded: Inclination {activeTleInfo?.inclination.toFixed(2)}° | Eccentricity {activeTleInfo?.eccentricity} | Mean Motion {activeTleInfo?.meanMotion.toFixed(2)} rev/day
+            </div>
+          </div>
+
+        </section>
+
+      </main>
+
+      {/* Humble footer */}
+      <footer className="border-t border-cyan-900/30 bg-[#0a0c16] px-6 py-6 mt-12 text-center text-xs text-cyan-600 font-mono space-y-2">
+        <div>
+          GAGANDRISHTI SWADESHI SPACE COMMAND WORKSPACE // ISRO GROUND TRACK // UTC {new Date().toISOString().substring(0, 10)}
+        </div>
+        <div className="text-[11px] text-cyan-400">
+          Made with ❤️ by Agnit Dasgupta
+        </div>
+      </footer>
+    </div>
+  );
+}

@@ -360,18 +360,14 @@ export default function LandingPage({ onLaunchDashboard }: LandingPageProps) {
         </section>
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-cyan-900/40 bg-[#060814] px-6 py-6 text-center text-xs font-mono text-slate-500 space-y-2">
-        <div className="flex items-center justify-center gap-4 text-cyan-600">
-          <span>GAGANDRISHTI V2.4</span>
-          <span>•</span>
-          <span>SGP4 ASTRODYNAMICS ENGINE</span>
-          <span>•</span>
-          <span>ISRO SPACE OPERATIONS</span>
+      {/* Humble footer */}
+      <footer className="border-t border-cyan-900/30 bg-[#0a0c16] px-6 py-6 mt-12 text-center text-xs text-cyan-600 font-mono space-y-2">
+        <div>
+          GAGANDRISHTI SWADESHI SPACE COMMAND WORKSPACE // ISRO GROUND TRACK // UTC {new Date().toISOString().substring(0, 10)}
         </div>
-        <p className="text-[11px] text-slate-600">
-          Authored by Agnit Dasgupta // High-Precision Indian Satellite Tracking & Telemetry Visualizer.
-        </p>
+        <div className="text-[11px] text-cyan-400">
+          Made with ❤️ by Agnit Dasgupta
+        </div>
       </footer>
     </div>
   );

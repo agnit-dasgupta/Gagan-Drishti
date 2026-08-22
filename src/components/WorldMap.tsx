@@ -28,12 +28,17 @@ export default function WorldMap({
 
     const resizeObserver = new ResizeObserver((entries) => {
       if (!entries || entries.length === 0) return;
-      const { width, height } = entries[0].contentRect;
-      // Maintain 2:1 aspect ratio for equirectangular projection
-      const calculatedHeight = width / 2;
-      setDimensions({
-        width: Math.floor(width),
-        height: Math.floor(calculatedHeight)
+      const { width } = entries[0].contentRect;
+      if (width < 100) return;
+      const newWidth = Math.floor(width);
+      const newHeight = Math.floor(newWidth / 2);
+
+      setDimensions((prev) => {
+        if (prev.width === newWidth && prev.height === newHeight) return prev;
+        return {
+          width: newWidth,
+          height: newHeight
+        };
       });
     });
 
@@ -281,8 +286,10 @@ export default function WorldMap({
     }
 
     // Draw Observer target
-    const obsX = lonToX(observer.lon, width);
-    const obsY = latToY(observer.lat, height);
+    const obsLon = observer && typeof observer.lon === 'number' ? observer.lon : 77.51;
+    const obsLat = observer && typeof observer.lat === 'number' ? observer.lat : 13.03;
+    const obsX = lonToX(obsLon, width);
+    const obsY = latToY(obsLat, height);
 
     ctx.beginPath();
     ctx.arc(obsX, obsY, 5, 0, Math.PI * 2);

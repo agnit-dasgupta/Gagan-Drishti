@@ -1,11 +1,9 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { SatelliteState } from '../types';
 
 interface SkyPlotProps {
   satelliteState: SatelliteState | null;
   groundTrack: { lat: number; lon: number; isFuture: boolean }[];
-  // We can pass or compute the local sky pass points
-  // Let's compute local look angles for the ground track to plot the pass line!
   observerLat: number;
   observerLon: number;
   observerAlt: number; // in meters
@@ -44,26 +42,33 @@ export default function SkyPlot({
     return () => resizeObserver.disconnect();
   }, []);
 
-  // Compute pass coordinates on the sky plot (Azimuth/Elevation for the last 45 and next 90 min)
-  const [skyPassPoints, setSkyPassPoints] = useState<{ az: number; el: number }[]>([]);
+  // Compute pass coordinates on the sky plot (Azimuth/Elevation for the last 45 and next 45 min)
+  // Ground reference time to nearest 30 seconds to avoid unnecessary recalculations
+  const timeMinuteBucket = satelliteState?.time
+    ? Math.floor(satelliteState.time.getTime() / 30000) * 30000
+    : 0;
 
-  useEffect(() => {
-    if (!line1 || !line2) return;
+  const skyPassPoints = useMemo(() => {
+    if (!line1 || !line2) return [];
 
     try {
       const satrec = satellite.twoline2satrec(line1, line2);
+      const validLat = typeof observerLat === 'number' && !isNaN(observerLat) ? observerLat : 13.03;
+      const validLon = typeof observerLon === 'number' && !isNaN(observerLon) ? observerLon : 77.51;
+      const validAlt = typeof observerAlt === 'number' && !isNaN(observerAlt) ? observerAlt : 920;
+
       const observerGd = {
-        latitude: satellite.degreesToRadians(observerLat),
-        longitude: satellite.degreesToRadians(observerLon),
-        height: observerAlt / 1000 // to km
+        latitude: satellite.degreesToRadians(validLat),
+        longitude: satellite.degreesToRadians(validLon),
+        height: validAlt / 1000 // to km
       };
 
       const points: { az: number; el: number }[] = [];
-      const now = new Date();
+      const refTime = timeMinuteBucket ? new Date(timeMinuteBucket) : new Date();
       
-      // Step through past 45 and future 45 minutes in 60-second intervals
+      // Step through past 45 and future 45 minutes in 30-second intervals
       for (let offset = -45 * 60; offset <= 45 * 60; offset += 30) {
-        const d = new Date(now.getTime() + offset * 1000);
+        const d = new Date(refTime.getTime() + offset * 1000);
         const pv = satellite.propagate(satrec, d);
         if (pv.position && typeof pv.position !== 'boolean') {
           const gmst = satellite.gstime(d);
@@ -79,11 +84,12 @@ export default function SkyPlot({
           }
         }
       }
-      setSkyPassPoints(points);
+      return points;
     } catch (err) {
       console.error('Error computing sky pass points', err);
+      return [];
     }
-  }, [line1, line2, observerLat, observerLon, observerAlt, satelliteState?.time?.getTime()]);
+  }, [line1, line2, observerLat, observerLon, observerAlt, timeMinuteBucket]);
 
   // Draw loop
   useEffect(() => {

@@ -219,12 +219,19 @@ export function isSatelliteSunlit(
   return distPerp >= EARTH_RADIUS;
 }
 
+export const DEFAULT_OBSERVER: ObserverLocation = {
+  lat: 13.03,
+  lon: 77.51,
+  alt: 920,
+  name: 'ISTRAC Bengaluru'
+};
+
 // Compute the complete state of a satellite from its TLE
 export function calculateSatelliteState(
   line1: string,
   line2: string,
   date: Date,
-  observer: ObserverLocation
+  observer?: ObserverLocation | null
 ): SatelliteState | null {
   try {
     const satrec = satellite.twoline2satrec(line1, line2);
@@ -248,11 +255,15 @@ export function calculateSatelliteState(
       velocityEci.x ** 2 + velocityEci.y ** 2 + velocityEci.z ** 2
     );
     
-    // Observer Look Angles (Azimuth, Elevation, Range)
+    // Observer Look Angles (Azimuth, Elevation, Range) with safe fallback
+    const validObserver = (observer && typeof observer.lat === 'number' && typeof observer.lon === 'number')
+      ? observer
+      : DEFAULT_OBSERVER;
+
     const observerGd = {
-      latitude: satellite.degreesToRadians(observer.lat),
-      longitude: satellite.degreesToRadians(observer.lon),
-      height: observer.alt / 1000 // Convert meters to km
+      latitude: satellite.degreesToRadians(validObserver.lat),
+      longitude: satellite.degreesToRadians(validObserver.lon),
+      height: (typeof validObserver.alt === 'number' ? validObserver.alt : 0) / 1000 // Convert meters to km
     };
     
     const positionEcf = satellite.eciToEcf(positionEci as satellite.EciVec3<number>, gmst);
@@ -396,17 +407,21 @@ export function calculateSensorFootprint(
 export function predictSatellitePasses(
   line1: string,
   line2: string,
-  observer: ObserverLocation,
+  observer?: ObserverLocation | null,
   startDate: Date = new Date(),
   lookaheadHours: number = 24
 ): SatellitePass[] {
   const passes: SatellitePass[] = [];
   try {
+    const validObserver = (observer && typeof observer.lat === 'number' && typeof observer.lon === 'number')
+      ? observer
+      : DEFAULT_OBSERVER;
+
     const satrec = satellite.twoline2satrec(line1, line2);
     const observerGd = {
-      latitude: satellite.degreesToRadians(observer.lat),
-      longitude: satellite.degreesToRadians(observer.lon),
-      height: observer.alt / 1000 // Convert meters to km
+      latitude: satellite.degreesToRadians(validObserver.lat),
+      longitude: satellite.degreesToRadians(validObserver.lon),
+      height: (typeof validObserver.alt === 'number' ? validObserver.alt : 0) / 1000 // Convert meters to km
     };
 
     const startMs = startDate.getTime();

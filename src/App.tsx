@@ -4,7 +4,9 @@ import WorldMap from './components/WorldMap';
 import SkyPlot from './components/SkyPlot';
 import OrientationVisualizer from './components/OrientationVisualizer';
 import { PassPredictor } from './components/PassPredictor';
-import { ObserverLocation, SatelliteState, TleInfo } from './types';
+import InteractiveGlobe3D from './components/InteractiveGlobe3D';
+import LandingPage from './components/LandingPage';
+import { ObserverLocation, SatelliteState, TleInfo, SatellitePreset } from './types';
 import {
   calculateSatelliteState,
   generateGroundTrack,
@@ -28,7 +30,12 @@ import {
   TrendingDown,
   TrendingUp,
   FastForward,
-  Save
+  Save,
+  Globe,
+  Map as MapIcon,
+  FileText,
+  Zap,
+  ArrowLeft
 } from 'lucide-react';
 
 const GROUND_STATION_PRESETS: ObserverLocation[] = [
@@ -40,6 +47,12 @@ const GROUND_STATION_PRESETS: ObserverLocation[] = [
 ];
 
 export default function App() {
+  // Navigation View State: 'landing' (Default Modern Landing Page) | 'command' (Full Mission Control)
+  const [currentView, setCurrentView] = useState<'landing' | 'command'>('landing');
+
+  // Ground Track View Mode in Command Center: '2d' (Mercator Canvas) | '3d' (Interactive Three.js Globe)
+  const [mapMode, setMapMode] = useState<'2d' | '3d'>('2d');
+
   // TLE States (with localStorage restoration)
   const [line1, setLine1] = useState<string>(() => {
     try {
@@ -51,7 +64,7 @@ export default function App() {
     } catch (e) {
       console.error('Failed to restore line1', e);
     }
-    return '';
+    return SATELLITE_PRESETS[0].line1;
   });
 
   const [line2, setLine2] = useState<string>(() => {
@@ -64,7 +77,7 @@ export default function App() {
     } catch (e) {
       console.error('Failed to restore line2', e);
     }
-    return '';
+    return SATELLITE_PRESETS[0].line2;
   });
 
   const [satName, setSatName] = useState<string>(() => {
@@ -77,7 +90,7 @@ export default function App() {
     } catch (e) {
       console.error('Failed to restore satName', e);
     }
-    return 'AstroSat (ISRO Space Obs)';
+    return SATELLITE_PRESETS[0].name;
   });
 
   // Selected Observer Location (starts at ISTRAC Bengaluru or loads from localStorage)
@@ -86,7 +99,18 @@ export default function App() {
       const saved = localStorage.getItem('orbital_path_config');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (parsed.observer) return parsed.observer;
+        if (
+          parsed.observer &&
+          typeof parsed.observer.lat === 'number' &&
+          typeof parsed.observer.lon === 'number'
+        ) {
+          return {
+            lat: parsed.observer.lat,
+            lon: parsed.observer.lon,
+            alt: typeof parsed.observer.alt === 'number' ? parsed.observer.alt : 920,
+            name: parsed.observer.name || 'Custom Station'
+          };
+        }
       }
     } catch (e) {
       console.error('Failed to restore observer location', e);
@@ -313,24 +337,70 @@ export default function App() {
     });
   };
 
+  // Handle switching preset from Landing Page or Explorer
+  const handleLaunchFromLanding = (preset?: SatellitePreset) => {
+    if (preset) {
+      setLine1(preset.line1);
+      setLine2(preset.line2);
+      setSatName(preset.name);
+      setAiAnalysis('');
+    }
+    setCurrentView('command');
+  };
+
+  // If user is viewing the modern 3D Landing Page
+  if (currentView === 'landing') {
+    return (
+      <LandingPage
+        onLaunchDashboard={handleLaunchFromLanding}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#05060a] text-cyan-50 flex flex-col font-sans selection:bg-cyan-500/20 selection:text-cyan-300 relative">
       <div className="absolute inset-0 opacity-5 pointer-events-none bg-[radial-gradient(#083344_1px,transparent_1px)] [background-size:20px_20px]"></div>
       
-      {/* Dynamic Header Room */}
-      <header className="border-b border-cyan-900/40 bg-[#0a0c16]/80 backdrop-blur-md px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4 sticky top-0 z-20">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded bg-cyan-500 flex items-center justify-center shadow-[0_0_15px_rgba(6,182,212,0.5)]">
+      {/* Dynamic Header Room with Navigation Tabs */}
+      <header className="border-b border-cyan-900/40 bg-[#0a0c16]/80 backdrop-blur-md px-6 py-3 flex flex-col md:flex-row justify-between items-center gap-4 sticky top-0 z-20">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => setCurrentView('landing')}
+            className="w-8 h-8 rounded bg-cyan-500 hover:bg-cyan-400 flex items-center justify-center shadow-[0_0_15px_rgba(6,182,212,0.5)] transition-transform hover:scale-105"
+            title="Return to 3D Overview"
+          >
             <Radio className="w-5 h-5 text-black animate-pulse" />
-          </div>
+          </button>
           <div>
-            <h1 className="text-xl font-bold tracking-tight uppercase">
-              GAGAN<span className="text-cyan-400">DRISHTI</span>
-            </h1>
-            <p className="text-[10px] text-cyan-600 uppercase tracking-widest font-mono font-bold">
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-bold tracking-tight uppercase">
+                GAGAN<span className="text-cyan-400">DRISHTI</span>
+              </h1>
+              <span className="text-[10px] bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 px-2 py-0.5 rounded font-mono font-bold">
+                MISSION COMMAND
+              </span>
+            </div>
+            <p className="text-[9px] text-cyan-600 uppercase tracking-widest font-mono font-bold">
               SWADESHI REAL-TIME ORBITAL TRACKER & GROUND PASS ANALYSIS
             </p>
           </div>
+        </div>
+
+        {/* Center View Mode Switcher */}
+        <div className="flex items-center bg-[#050816] p-1 rounded-xl border border-cyan-900/50">
+          <button
+            onClick={() => setCurrentView('landing')}
+            className="px-3 py-1.5 rounded-lg text-xs font-mono text-slate-400 hover:text-cyan-300 transition-all flex items-center gap-1.5"
+          >
+            <Globe className="w-3.5 h-3.5" />
+            3D SHOWCASE
+          </button>
+          <button
+            className="px-3 py-1.5 rounded-lg text-xs font-mono bg-cyan-500 text-black font-bold shadow-[0_0_10px_rgba(6,182,212,0.4)] flex items-center gap-1.5"
+          >
+            <Zap className="w-3.5 h-3.5 fill-black" />
+            MISSION COMMAND
+          </button>
         </div>
 
         {/* Global Live Clock Room */}
@@ -477,17 +547,62 @@ export default function App() {
           </div>
         </section>
 
-        {/* Live Map & Polar Radar Plot Section */}
+        {/* Live Map / 3D Globe & Polar Radar Plot Section */}
         <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* World map takes 2/3 of space */}
-          <div className="lg:col-span-2 h-full flex flex-col">
-            <WorldMap
-              satelliteState={satelliteState}
-              groundTrack={groundTrack}
-              observer={observer}
-              setObserver={setObserver}
-              sensorFootprint={sensorFootprint}
-            />
+          {/* Ground Track Viewport with 2D/3D Mode Switcher (takes 2/3 of space) */}
+          <div className="lg:col-span-2 h-full flex flex-col space-y-2">
+            <div className="flex items-center justify-between bg-[#080d1e] px-4 py-2 rounded-xl border border-cyan-900/40">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-mono font-bold text-cyan-300 uppercase">
+                  {mapMode === '2d' ? '2D Equirectangular Ground Track' : '3D High-Fidelity WebGL Orbital Globe'}
+                </span>
+              </div>
+
+              {/* 2D / 3D Mode Toggle Button */}
+              <div className="flex items-center bg-[#04060f] p-1 rounded-lg border border-cyan-950">
+                <button
+                  onClick={() => setMapMode('2d')}
+                  className={`px-3 py-1 rounded text-xs font-mono flex items-center gap-1.5 transition-all ${
+                    mapMode === '2d'
+                      ? 'bg-cyan-500 text-black font-bold shadow-[0_0_10px_rgba(6,182,212,0.4)]'
+                      : 'text-cyan-400 hover:bg-cyan-950/60'
+                  }`}
+                >
+                  <MapIcon className="w-3.5 h-3.5" />
+                  2D MAP
+                </button>
+                <button
+                  onClick={() => setMapMode('3d')}
+                  className={`px-3 py-1 rounded text-xs font-mono flex items-center gap-1.5 transition-all ${
+                    mapMode === '3d'
+                      ? 'bg-cyan-500 text-black font-bold shadow-[0_0_10px_rgba(6,182,212,0.4)]'
+                      : 'text-cyan-400 hover:bg-cyan-950/60'
+                  }`}
+                >
+                  <Globe className="w-3.5 h-3.5" />
+                  3D GLOBE
+                </button>
+              </div>
+            </div>
+
+            {mapMode === '2d' ? (
+              <WorldMap
+                satelliteState={satelliteState}
+                groundTrack={groundTrack}
+                observer={observer}
+                setObserver={setObserver}
+                sensorFootprint={sensorFootprint}
+              />
+            ) : (
+              <InteractiveGlobe3D
+                activeTle1={line1}
+                activeTle2={line2}
+                satName={satName}
+                observer={observer}
+                simulationTime={time}
+                compact={false}
+              />
+            )}
           </div>
 
           {/* Sky Radar Scope takes 1/3 */}

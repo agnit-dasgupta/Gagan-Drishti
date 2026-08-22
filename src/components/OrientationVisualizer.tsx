@@ -30,22 +30,32 @@ export default function OrientationVisualizer({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [dimensions, setDimensions] = useState({ width: 320, height: 200 });
 
-  // Handle canvas sizing
+  // Handle canvas sizing with ResizeObserver
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.parentElement?.getBoundingClientRect();
-    if (rect && rect.width > 100) {
-      const currentWidth = Math.floor(rect.width);
-      setDimensions((prev) => {
-        if (prev.width === currentWidth) return prev;
-        return {
-          width: currentWidth,
-          height: 180
-        };
-      });
-    }
-  }, [satelliteState]);
+    if (!canvas || !canvas.parentElement) return;
+
+    const parent = canvas.parentElement;
+    const updateSize = () => {
+      const rect = parent.getBoundingClientRect();
+      if (rect && rect.width > 50) {
+        const currentWidth = Math.floor(rect.width);
+        setDimensions((prev) => {
+          if (prev.width === currentWidth) return prev;
+          return {
+            width: currentWidth,
+            height: 180
+          };
+        });
+      }
+    };
+
+    updateSize();
+    const observer = new ResizeObserver(updateSize);
+    observer.observe(parent);
+
+    return () => observer.disconnect();
+  }, []);
 
   // Draw 3D-like wireframe satellite on canvas
   useEffect(() => {

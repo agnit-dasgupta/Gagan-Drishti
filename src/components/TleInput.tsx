@@ -98,170 +98,186 @@ export default function TleInput({ onTleChange, activeTleInfo, line1, line2 }: T
   const categories = Array.from(new Set(SATELLITE_PRESETS.map(p => p.category)));
 
   return (
-    <div className="flex flex-col bg-[#0a0c16] border border-cyan-900/30 rounded-xl overflow-hidden shadow-[0_0_20px_rgba(6,182,212,0.05)] h-full">
+    <div className="flex flex-col bg-[#0a0c16] border border-cyan-900/30 rounded-xl overflow-hidden shadow-[0_0_20px_rgba(6,182,212,0.05)]">
       <div className="px-5 py-4 bg-[#0a0c16] border-b border-cyan-900/30 flex justify-between items-center">
         <span className="font-mono text-xs font-semibold uppercase tracking-wider text-cyan-400">
-          Two-Line Element (TLE) Configuration
+          Two-Line Element (TLE) Configuration & Orbital Elements
+        </span>
+        <span className="text-[10px] font-mono text-cyan-600">
+          NORAD SGP4 PROPAGATOR
         </span>
       </div>
 
-      <div className="p-4 space-y-4 flex-1 flex flex-col justify-between">
-        <div className="space-y-4">
-          {/* Tabs */}
-          <div className="flex border-b border-cyan-900/30">
-            <button
-              onClick={() => setIsManualMode(false)}
-              className={`flex-1 py-1.5 text-xs font-mono font-semibold transition-colors border-b-2 ${
-                !isManualMode
-                  ? 'border-cyan-500 text-cyan-400 bg-cyan-950/20'
-                  : 'border-transparent text-cyan-600 hover:text-cyan-400'
-              }`}
-            >
-              🚀 Preloaded Presets
-            </button>
-            <button
-              onClick={() => setIsManualMode(true)}
-              className={`flex-1 py-1.5 text-xs font-mono font-semibold transition-colors border-b-2 ${
-                isManualMode
-                  ? 'border-cyan-500 text-cyan-400 bg-cyan-950/20'
-                  : 'border-transparent text-cyan-600 hover:text-cyan-400'
-              }`}
-            >
-              ✍️ Manual Entry
-            </button>
-          </div>
-
-          {/* Preset Selection Mode */}
-          {!isManualMode ? (
-            <div className="space-y-3">
-              <div>
-                <label className="text-[10px] uppercase font-bold text-cyan-600 font-mono block mb-1 tracking-wider">
-                  Select a Satellite
-                </label>
-                <select
-                  value={selectedPresetId}
-                  onChange={(e) => handlePresetSelect(e.target.value)}
-                  className="w-full bg-[#05060a] border border-cyan-800/50 rounded px-3 py-1.5 text-xs font-mono text-cyan-100 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/20"
-                >
-                  {categories.map((cat) => (
-                    <optgroup key={cat} label={cat} className="bg-[#05060a] text-cyan-600">
-                      {SATELLITE_PRESETS.filter(p => p.category === cat).map((p) => (
-                        <option key={p.id} value={p.id} className="text-cyan-200">
-                          {p.name}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
-              </div>
-
-              {/* Preset description */}
-              {selectedPresetId && (
-                <div className="bg-cyan-950/20 border border-cyan-900/20 p-3 rounded text-xs leading-relaxed text-cyan-400 font-sans">
-                  {SATELLITE_PRESETS.find(p => p.id === selectedPresetId)?.description}
-                </div>
-              )}
-            </div>
-          ) : (
-            /* Manual TLE Entry Mode */
-            <div className="space-y-3">
-              <div className="grid grid-cols-1 gap-2.5">
-                <div>
-                  <label className="text-[10px] uppercase font-bold text-cyan-600 font-mono block mb-1 tracking-wider">
-                    Satellite Name
-                  </label>
-                  <input
-                    type="text"
-                    value={customName}
-                    onChange={(e) => setCustomName(e.target.value)}
-                    placeholder="E.g., ISS (Zarya)"
-                    className="w-full bg-[#05060a] border border-cyan-800/50 rounded px-2.5 py-1 text-xs font-mono text-cyan-100 focus:outline-none focus:border-cyan-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[10px] uppercase font-bold text-cyan-600 font-mono block mb-1 tracking-wider">
-                    TLE Line 1
-                  </label>
-                  <input
-                    type="text"
-                    value={customLine1}
-                    onChange={(e) => setCustomLine1(e.target.value)}
-                    placeholder="1 25544U 98067A   24083.56149176..."
-                    className="w-full bg-[#05060a] border border-cyan-800/50 rounded px-2.5 py-1 text-xs font-mono text-cyan-100 focus:outline-none focus:border-cyan-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-[10px] uppercase font-bold text-cyan-600 font-mono block mb-1 tracking-wider">
-                    TLE Line 2
-                  </label>
-                  <input
-                    type="text"
-                    value={customLine2}
-                    onChange={(e) => setCustomLine2(e.target.value)}
-                    placeholder="2 25544  51.6417 141.0185 0005705..."
-                    className="w-full bg-[#05060a] border border-cyan-800/50 rounded px-2.5 py-1 text-xs font-mono text-cyan-100 focus:outline-none focus:border-cyan-500"
-                  />
-                </div>
-              </div>
-
-              {validationError && (
-                <div className="text-[11px] font-mono text-rose-400 bg-rose-500/5 border border-rose-500/20 p-2 rounded">
-                  ⚠️ {validationError}
-                </div>
-              )}
-
+      <div className="p-5">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          {/* Left Column: TLE Selector & Manual Entry */}
+          <div className="lg:col-span-6 space-y-4">
+            {/* Tabs */}
+            <div className="flex border-b border-cyan-900/30">
               <button
-                onClick={handleApplyCustomTle}
-                className="w-full bg-cyan-600 hover:bg-cyan-500 text-black font-bold font-sans text-xs py-2 px-4 rounded transition-colors shadow-[0_0_15px_rgba(6,182,212,0.3)] uppercase tracking-wider"
+                onClick={() => setIsManualMode(false)}
+                className={`flex-1 py-1.5 text-xs font-mono font-semibold transition-colors border-b-2 ${
+                  !isManualMode
+                    ? 'border-cyan-500 text-cyan-400 bg-cyan-950/20'
+                    : 'border-transparent text-cyan-600 hover:text-cyan-400'
+                }`}
               >
-                Apply Custom TLE
+                🚀 Preloaded Presets
+              </button>
+              <button
+                onClick={() => setIsManualMode(true)}
+                className={`flex-1 py-1.5 text-xs font-mono font-semibold transition-colors border-b-2 ${
+                  isManualMode
+                    ? 'border-cyan-500 text-cyan-400 bg-cyan-950/20'
+                    : 'border-transparent text-cyan-600 hover:text-cyan-400'
+                }`}
+              >
+                ✍️ Manual Entry
               </button>
             </div>
-          )}
-        </div>
 
-        {/* Keplerian Orbital Elements Breakdown */}
-        {activeTleInfo && (
-          <div className="mt-4 border-t border-cyan-900/30 pt-3">
-            <label className="text-[10px] uppercase font-bold text-cyan-600 font-mono block mb-2 tracking-wider">
-              Keplerian Orbital Elements
-            </label>
-            <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px] font-mono">
-              <div className="flex justify-between border-b border-cyan-900/10 pb-1">
-                <span className="text-cyan-600">Inclination:</span>
-                <span className="text-cyan-200 font-semibold">{activeTleInfo.inclination.toFixed(4)}°</span>
+            {/* Preset Selection Mode */}
+            {!isManualMode ? (
+              <div className="space-y-3">
+                <div>
+                  <label className="text-[10px] uppercase font-bold text-cyan-600 font-mono block mb-1 tracking-wider">
+                    Select a Satellite
+                  </label>
+                  <select
+                    value={selectedPresetId}
+                    onChange={(e) => handlePresetSelect(e.target.value)}
+                    className="w-full bg-[#05060a] border border-cyan-800/50 rounded px-3 py-2 text-xs font-mono text-cyan-100 focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/20"
+                  >
+                    {categories.map((cat) => (
+                      <optgroup key={cat} label={cat} className="bg-[#05060a] text-cyan-600">
+                        {SATELLITE_PRESETS.filter(p => p.category === cat).map((p) => (
+                          <option key={p.id} value={p.id} className="text-cyan-200">
+                            {p.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Preset description */}
+                {selectedPresetId && (
+                  <div className="bg-cyan-950/20 border border-cyan-900/20 p-3.5 rounded-lg text-xs leading-relaxed text-cyan-300/90 font-sans">
+                    {SATELLITE_PRESETS.find(p => p.id === selectedPresetId)?.description}
+                  </div>
+                )}
               </div>
-              <div className="flex justify-between border-b border-cyan-900/10 pb-1">
-                <span className="text-cyan-600">Eccentricity:</span>
-                <span className="text-cyan-200 font-semibold">{activeTleInfo.eccentricity.toFixed(7)}</span>
+            ) : (
+              /* Manual TLE Entry Mode */
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 gap-2.5">
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-cyan-600 font-mono block mb-1 tracking-wider">
+                      Satellite Name
+                    </label>
+                    <input
+                      type="text"
+                      value={customName}
+                      onChange={(e) => setCustomName(e.target.value)}
+                      placeholder="E.g., ISS (Zarya)"
+                      className="w-full bg-[#05060a] border border-cyan-800/50 rounded px-3 py-1.5 text-xs font-mono text-cyan-100 focus:outline-none focus:border-cyan-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-cyan-600 font-mono block mb-1 tracking-wider">
+                      TLE Line 1
+                    </label>
+                    <input
+                      type="text"
+                      value={customLine1}
+                      onChange={(e) => setCustomLine1(e.target.value)}
+                      placeholder="1 25544U 98067A   24083.56149176..."
+                      className="w-full bg-[#05060a] border border-cyan-800/50 rounded px-3 py-1.5 text-xs font-mono text-cyan-100 focus:outline-none focus:border-cyan-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-cyan-600 font-mono block mb-1 tracking-wider">
+                      TLE Line 2
+                    </label>
+                    <input
+                      type="text"
+                      value={customLine2}
+                      onChange={(e) => setCustomLine2(e.target.value)}
+                      placeholder="2 25544  51.6417 141.0185 0005705..."
+                      className="w-full bg-[#05060a] border border-cyan-800/50 rounded px-3 py-1.5 text-xs font-mono text-cyan-100 focus:outline-none focus:border-cyan-500"
+                    />
+                  </div>
+                </div>
+
+                {validationError && (
+                  <div className="text-[11px] font-mono text-rose-400 bg-rose-500/5 border border-rose-500/20 p-2 rounded">
+                    ⚠️ {validationError}
+                  </div>
+                )}
+
+                <button
+                  onClick={handleApplyCustomTle}
+                  className="w-full bg-cyan-600 hover:bg-cyan-500 text-black font-bold font-sans text-xs py-2 px-4 rounded transition-colors shadow-[0_0_15px_rgba(6,182,212,0.3)] uppercase tracking-wider"
+                >
+                  Apply Custom TLE
+                </button>
               </div>
-              <div className="flex justify-between border-b border-cyan-900/10 pb-1">
-                <span className="text-cyan-600">Mean Motion:</span>
-                <span className="text-cyan-200 font-semibold">{activeTleInfo.meanMotion.toFixed(4)} rev/d</span>
-              </div>
-              <div className="flex justify-between border-b border-cyan-900/10 pb-1">
-                <span className="text-cyan-600">RAAN (Ω):</span>
-                <span className="text-cyan-200 font-semibold">{activeTleInfo.raan.toFixed(4)}°</span>
-              </div>
-              <div className="flex justify-between border-b border-cyan-900/10 pb-1">
-                <span className="text-cyan-600">Arg of Perigee:</span>
-                <span className="text-cyan-200 font-semibold">{activeTleInfo.argPerigee.toFixed(4)}°</span>
-              </div>
-              <div className="flex justify-between border-b border-cyan-900/10 pb-1">
-                <span className="text-cyan-600">NORAD ID:</span>
-                <span className="text-cyan-200 font-semibold">{activeTleInfo.noradId}</span>
-              </div>
-              <div className="col-span-2 flex justify-between pt-1">
-                <span className="text-cyan-600">Epoch (UTC):</span>
-                <span className="text-cyan-200 font-semibold truncate text-[10px]">
-                  {activeTleInfo.epoch.toISOString().replace('T', ' ').substring(0, 19)}
-                </span>
-              </div>
-            </div>
+            )}
           </div>
-        )}
+
+          {/* Right Column: Keplerian Orbital Elements Breakdown */}
+          <div className="lg:col-span-6 bg-[#05060a]/70 border border-cyan-900/30 rounded-lg p-4 space-y-3">
+            <div className="flex justify-between items-center border-b border-cyan-900/40 pb-2">
+              <label className="text-[11px] uppercase font-bold text-cyan-400 font-mono tracking-wider">
+                Keplerian Orbital Elements
+              </label>
+              <span className="text-[10px] font-mono text-cyan-600">
+                NORAD #{activeTleInfo?.noradId || '--'}
+              </span>
+            </div>
+
+            {activeTleInfo ? (
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs font-mono">
+                <div className="flex justify-between border-b border-cyan-900/20 pb-1.5">
+                  <span className="text-cyan-600">Inclination:</span>
+                  <span className="text-cyan-200 font-semibold">{activeTleInfo.inclination.toFixed(4)}°</span>
+                </div>
+                <div className="flex justify-between border-b border-cyan-900/20 pb-1.5">
+                  <span className="text-cyan-600">Eccentricity:</span>
+                  <span className="text-cyan-200 font-semibold">{activeTleInfo.eccentricity.toFixed(7)}</span>
+                </div>
+                <div className="flex justify-between border-b border-cyan-900/20 pb-1.5">
+                  <span className="text-cyan-600">Mean Motion:</span>
+                  <span className="text-cyan-200 font-semibold">{activeTleInfo.meanMotion.toFixed(4)} rev/d</span>
+                </div>
+                <div className="flex justify-between border-b border-cyan-900/20 pb-1.5">
+                  <span className="text-cyan-600">RAAN (Ω):</span>
+                  <span className="text-cyan-200 font-semibold">{activeTleInfo.raan.toFixed(4)}°</span>
+                </div>
+                <div className="flex justify-between border-b border-cyan-900/20 pb-1.5">
+                  <span className="text-cyan-600">Arg of Perigee:</span>
+                  <span className="text-cyan-200 font-semibold">{activeTleInfo.argPerigee.toFixed(4)}°</span>
+                </div>
+                <div className="flex justify-between border-b border-cyan-900/20 pb-1.5">
+                  <span className="text-cyan-600">Intl Designator:</span>
+                  <span className="text-cyan-200 font-semibold">{activeTleInfo.intlDesignator || '--'}</span>
+                </div>
+                <div className="col-span-2 flex justify-between pt-1 border-t border-cyan-900/20">
+                  <span className="text-cyan-600">Epoch (UTC):</span>
+                  <span className="text-cyan-200 font-semibold truncate text-[11px]">
+                    {activeTleInfo.epoch.toISOString().replace('T', ' ').substring(0, 19)}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="text-xs font-mono text-cyan-700 py-4 text-center">
+                Select a valid TLE set to calculate Keplerian parameters.
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

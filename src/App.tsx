@@ -21,10 +21,8 @@ import {
   Clock,
   Compass,
   Radio,
-  Sparkles,
   MapPin,
   Cpu,
-  Info,
   Sun,
   Moon,
   TrendingDown,
@@ -149,10 +147,6 @@ export default function App() {
   const [yaw, setYaw] = useState<number>(0);
   const [sensorFov, setSensorFov] = useState<number>(12); // camera field of view half angle
 
-  // AI Mission briefing states
-  const [aiAnalysis, setAiAnalysis] = useState<string>('');
-  const [isAiLoading, setIsAiLoading] = useState<boolean>(false);
-
   // Parse current active TLE
   const activeTleInfo = useMemo(() => {
     if (!line1 || !line2) return null;
@@ -168,8 +162,6 @@ export default function App() {
     setLine1(l1);
     setLine2(l2);
     setSatName(name);
-    // Reset AI analysis when satellite changes
-    setAiAnalysis('');
   };
 
   // Keep date updating when playing
@@ -238,112 +230,12 @@ export default function App() {
     );
   }, [satelliteState, pitch, roll, sensorFov]);
 
-  // Request expert mission brief from Gemini API server-side
-  const handleRequestAiBrief = async () => {
-    if (!line1 || !line2 || !activeTleInfo) return;
-
-    setIsAiLoading(true);
-    setAiAnalysis('');
-
-    try {
-      const response = await fetch('/api/analyze-satellite', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: satName,
-          tle1: line1,
-          tle2: line2,
-          inclination: activeTleInfo.inclination,
-          eccentricity: activeTleInfo.eccentricity,
-          meanMotion: activeTleInfo.meanMotion,
-          alt: satelliteState ? satelliteState.alt : 400
-        })
-      });
-
-      const data = await response.json();
-      if (response.ok) {
-        setAiAnalysis(data.analysis || 'No analysis available.');
-      } else {
-        setAiAnalysis(`Error: ${data.error || 'Failed to retrieve briefings.'}`);
-      }
-    } catch (err: any) {
-      setAiAnalysis(`Network error: ${err.message || err}`);
-    } finally {
-      setIsAiLoading(false);
-    }
-  };
-
-  // Simple and highly robust custom renderer for Markdown text
-  const renderMarkdown = (md: string) => {
-    if (!md) return null;
-    return md.split('\n').map((line, idx) => {
-      let trimmed = line.trim();
-      
-      // Headers
-      if (trimmed.startsWith('###')) {
-        return (
-          <h4 key={idx} className="text-sm font-semibold text-cyan-300 font-mono mt-3 mb-1 uppercase tracking-wide">
-            {trimmed.replace('###', '').trim()}
-          </h4>
-        );
-      }
-      if (trimmed.startsWith('##')) {
-        return (
-          <h3 key={idx} className="text-base font-bold text-emerald-400 font-mono mt-4 mb-2 uppercase border-b border-slate-800 pb-1">
-            {trimmed.replace('##', '').trim()}
-          </h3>
-        );
-      }
-      if (trimmed.startsWith('#')) {
-        return (
-          <h2 key={idx} className="text-lg font-bold text-white font-mono mt-5 mb-3 border-b border-slate-700 pb-1.5">
-            {trimmed.replace('#', '').trim()}
-          </h2>
-        );
-      }
-
-      // Bullet items
-      if (trimmed.startsWith('-') || trimmed.startsWith('*')) {
-        const content = trimmed.substring(1).trim();
-        return (
-          <li key={idx} className="ml-4 list-disc text-slate-300 text-xs leading-relaxed mb-1">
-            {parseInlineStyles(content)}
-          </li>
-        );
-      }
-
-      // Standard paragraphs
-      if (trimmed.length === 0) return <div key={idx} className="h-2" />;
-
-      return (
-        <p key={idx} className="text-slate-300 text-xs leading-relaxed mb-2.5 font-sans">
-          {parseInlineStyles(trimmed)}
-        </p>
-      );
-    });
-  };
-
-  // Parse inline bolding (**text**) or inline code (`text`)
-  const parseInlineStyles = (text: string) => {
-    const parts = text.split(/(\*\*.*?\*\*|`.*?`)/g);
-    return parts.map((part, i) => {
-      if (part.startsWith('**') && part.endsWith('**')) {
-        return <strong key={i} className="text-emerald-300 font-semibold">{part.slice(2, -2)}</strong>;
-      }
-      if (part.startsWith('`') && part.endsWith('`')) {
-        return <code key={i} className="bg-slate-950 px-1.5 py-0.5 rounded text-[10px] text-cyan-400 font-mono border border-slate-800/60">{part.slice(1, -1)}</code>;
-      }
-      return part;
-    });
-  };
-
   // Handle switching preset from Landing Page or Explorer
   const handleLaunchFromLanding = (preset?: SatellitePreset) => {
     if (preset) {
       setLine1(preset.line1);
       setLine2(preset.line2);
       setSatName(preset.name);
-      setAiAnalysis('');
     }
     setCurrentView('command');
   };
@@ -773,68 +665,14 @@ export default function App() {
           />
         </section>
 
-        {/* Config Inputs (TLE Presets) & AI Mission Briefing Panel */}
-        <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          
-          {/* TLE input & Keplerian parameter table */}
-          <div>
-            <TleInput
-              onTleChange={handleTleChange}
-              activeTleInfo={activeTleInfo}
-              line1={line1}
-              line2={line2}
-            />
-          </div>
-
-          {/* AI Mission briefing card (takes 2 columns) */}
-          <div className="lg:col-span-2 flex flex-col bg-[#0a0c16] border border-cyan-900/30 rounded-xl overflow-hidden shadow-[0_0_20px_rgba(6,182,212,0.05)] h-full justify-between">
-            <div className="px-5 py-4 bg-[#0a0c16] border-b border-cyan-900/30 flex justify-between items-center">
-              <span className="font-mono text-xs font-semibold uppercase tracking-wider text-cyan-400 flex items-center gap-1.5">
-                <Sparkles className="w-4 h-4 text-cyan-400" />
-                AI Antariksh Analysis & Insights
-              </span>
-              <button
-                onClick={handleRequestAiBrief}
-                disabled={isAiLoading || !line1 || !line2}
-                className="bg-cyan-600 hover:bg-cyan-500 text-black font-bold font-sans text-xs uppercase tracking-widest px-4 py-1.5 rounded transition-all shadow-[0_0_15px_rgba(6,182,212,0.3)] disabled:bg-[#05060a] disabled:text-cyan-800 disabled:border-cyan-900/20 disabled:shadow-none border border-transparent flex items-center gap-1.5 cursor-pointer"
-              >
-                <Sparkles className="w-3 h-3" />
-                {isAiLoading ? 'DECRYPTING...' : 'DECODE KAKSHA (ORBIT)'}
-              </button>
-            </div>
-
-            {/* AI Text Display */}
-            <div className="p-5 flex-1 bg-[#05060a]/60 overflow-y-auto max-h-[350px] min-h-[250px]">
-              {isAiLoading ? (
-                /* Dynamic space-mission thematic loading screens */
-                <div className="flex flex-col items-center justify-center h-full text-center space-y-4 py-8">
-                  <div className="w-8 h-8 border-2 border-cyan-500/20 border-t-cyan-400 rounded-full animate-spin"></div>
-                  <div className="space-y-1 font-mono text-xs text-cyan-400">
-                    <p className="font-bold uppercase tracking-wider animate-pulse">Establishing Connection with ISTRAC Bengaluru...</p>
-                    <p className="text-[10px] text-cyan-600">Processing NORAD ID {activeTleInfo?.noradId || '--'} elements</p>
-                    <p className="text-[10px] text-cyan-600">Querying Swadeshi Gemini Spaceflight Intel systems</p>
-                  </div>
-                </div>
-              ) : aiAnalysis ? (
-                <div className="prose prose-invert max-w-none text-left">
-                  {renderMarkdown(aiAnalysis)}
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center h-full text-center py-8 text-cyan-600 font-mono text-xs space-y-2">
-                  <Info className="w-8 h-8 text-cyan-800" />
-                  <p>Request an expert astrophysical and operational intelligence analysis on the active satellite's orbital profile.</p>
-                  <p className="text-[10px] text-cyan-700 max-w-sm">
-                    Our AI parses the Keplerian coefficients to outline orbit properties, expected payloads, coverage swath, and visual viewing guidelines.
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <div className="px-5 py-3 bg-[#0a0c16]/50 border-t border-cyan-900/30 text-[9px] font-mono text-cyan-600 text-center">
-              Coefficients Decoded: Inclination {activeTleInfo?.inclination.toFixed(2)}° | Eccentricity {activeTleInfo?.eccentricity} | Mean Motion {activeTleInfo?.meanMotion.toFixed(2)} rev/day
-            </div>
-          </div>
-
+        {/* Config Inputs (TLE Presets & Orbital Mechanics Breakdown) */}
+        <section className="w-full">
+          <TleInput
+            onTleChange={handleTleChange}
+            activeTleInfo={activeTleInfo}
+            line1={line1}
+            line2={line2}
+          />
         </section>
 
       </main>

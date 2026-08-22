@@ -278,20 +278,15 @@ export default function App() {
           </div>
         </div>
 
-        {/* Center View Mode Switcher */}
-        <div className="flex items-center bg-[#050816] p-1 rounded-xl border border-cyan-900/50">
+        {/* Navigation Link to Landing Page */}
+        <div className="flex items-center">
           <button
             onClick={() => setCurrentView('landing')}
-            className="px-3 py-1.5 rounded-lg text-xs font-mono text-slate-400 hover:text-cyan-300 transition-all flex items-center gap-1.5"
+            className="group flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-950/60 to-[#080d1e] hover:from-cyan-900/80 hover:to-[#0c142e] border border-cyan-700/50 hover:border-cyan-400 text-cyan-300 hover:text-white font-mono text-xs transition-all shadow-[0_0_15px_rgba(6,182,212,0.15)] cursor-pointer active:scale-95"
+            title="Navigate back to GaganDrishti Landing Page & Architectural Showcase"
           >
-            <Globe className="w-3.5 h-3.5" />
-            3D SHOWCASE
-          </button>
-          <button
-            className="px-3 py-1.5 rounded-lg text-xs font-mono bg-cyan-500 text-black font-bold shadow-[0_0_10px_rgba(6,182,212,0.4)] flex items-center gap-1.5"
-          >
-            <Zap className="w-3.5 h-3.5 fill-black" />
-            MISSION COMMAND
+            <ArrowLeft className="w-4 h-4 text-cyan-400 group-hover:-translate-x-1 transition-transform" />
+            <span className="font-bold tracking-wider uppercase">BACK TO LANDING PAGE</span>
           </button>
         </div>
 

@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { motion } from 'motion/react';
 import InteractiveGlobe3D from './InteractiveGlobe3D';
 import { SatellitePreset, ObserverLocation } from '../types';
 import { SATELLITE_PRESETS } from '../utils/satelliteCalc';
@@ -46,6 +47,51 @@ export default function LandingPage({ onLaunchDashboard }: LandingPageProps) {
   const [selectedPreset, setSelectedPreset] = useState<SatellitePreset>(SATELLITE_PRESETS[0]);
   const [activeApiTab, setActiveApiTab] = useState<'agri' | 'logistics' | 'orbit' | 'telemetry'>('agri');
   const [copiedCode, setCopiedCode] = useState<boolean>(false);
+
+  // Dynamic Typewriter Effect for Hero Element
+  const HERO_TYPEWRITER_PHRASES = [
+    "Translation Layer",
+    "Direct Antenna Ingestion",
+    "Zero-Data-Gravity Pipeline",
+    "Enterprise DaaS Engine",
+    "Real-Time SGP4 Astrodynamics"
+  ];
+  const [phraseIdx, setPhraseIdx] = useState<number>(0);
+  const [typedText, setTypedText] = useState<string>('');
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
+  const [typingSpeed, setTypingSpeed] = useState<number>(80);
+
+  useEffect(() => {
+    const currentTarget = HERO_TYPEWRITER_PHRASES[phraseIdx];
+    let timeout: NodeJS.Timeout;
+
+    if (!isDeleting) {
+      if (typedText.length < currentTarget.length) {
+        timeout = setTimeout(() => {
+          setTypedText(currentTarget.slice(0, typedText.length + 1));
+          setTypingSpeed(65 + Math.random() * 30);
+        }, typingSpeed);
+      } else {
+        timeout = setTimeout(() => {
+          setIsDeleting(true);
+          setTypingSpeed(40);
+        }, 2200);
+      }
+    } else {
+      if (typedText.length > 0) {
+        timeout = setTimeout(() => {
+          setTypedText(currentTarget.slice(0, typedText.length - 1));
+          setTypingSpeed(30);
+        }, typingSpeed);
+      } else {
+        setIsDeleting(false);
+        setPhraseIdx((prev) => (prev + 1) % HERO_TYPEWRITER_PHRASES.length);
+        setTypingSpeed(90);
+      }
+    }
+
+    return () => clearTimeout(timeout);
+  }, [typedText, isDeleting, phraseIdx, typingSpeed]);
 
   // Quick Doppler calculator demo interactive state
   const [dopplerFrequency, setDopplerFrequency] = useState<number>(137.5); // MHz
@@ -158,7 +204,12 @@ export default function LandingPage({ onLaunchDashboard }: LandingPageProps) {
       <div className="absolute inset-0 opacity-10 pointer-events-none bg-[radial-gradient(#06b6d4_1px,transparent_1px)] [background-size:32px_32px]"></div>
 
       {/* Top Navbar */}
-      <header className="border-b border-cyan-900/40 bg-[#080c1b]/85 backdrop-blur-lg px-6 py-4 flex justify-between items-center sticky top-0 z-30 shadow-lg">
+      <motion.header
+        initial={{ y: -30, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.6, ease: 'easeOut' }}
+        className="border-b border-cyan-900/40 bg-[#080c1b]/85 backdrop-blur-lg px-6 py-4 flex justify-between items-center sticky top-0 z-30 shadow-lg"
+      >
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-cyan-500 to-emerald-400 flex items-center justify-center shadow-[0_0_20px_rgba(6,182,212,0.6)]">
             <Radio className="w-5 h-5 text-black" />
@@ -191,38 +242,91 @@ export default function LandingPage({ onLaunchDashboard }: LandingPageProps) {
 
           <button
             onClick={() => onLaunchDashboard(selectedPreset)}
-            className="flex items-center gap-2 bg-gradient-to-r from-cyan-500 to-emerald-400 hover:from-cyan-400 hover:to-emerald-300 text-black font-bold font-mono text-xs px-4 py-2 rounded-xl shadow-[0_0_25px_rgba(6,182,212,0.4)] transition-all transform hover:scale-105 active:scale-95 uppercase tracking-wider"
+            className="flex items-center gap-2 bg-gradient-to-r from-cyan-500 to-emerald-400 hover:from-cyan-400 hover:to-emerald-300 text-black font-bold font-mono text-xs px-4 py-2 rounded-xl shadow-[0_0_25px_rgba(6,182,212,0.4)] transition-all transform hover:scale-105 active:scale-95 uppercase tracking-wider cursor-pointer"
           >
             <Zap className="w-4 h-4 fill-black" />
             <span>LAUNCH MISSION COMMAND</span>
           </button>
         </div>
-      </header>
+      </motion.header>
 
       {/* Main Landing Page Content */}
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 md:px-6 py-8 md:py-12 space-y-20 relative z-10">
 
-        {/* HERO SECTION: Strategic Value Proposition */}
+        {/* HERO SECTION: Strategic Value Proposition with On-Load Motion Animations */}
         <section className="space-y-8 pt-4">
           <div className="max-w-4xl space-y-5">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-cyan-950/80 border border-cyan-500/40 text-cyan-300 text-xs font-mono shadow-[0_0_20px_rgba(6,182,212,0.25)]">
+            <motion.div
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.1 }}
+              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-cyan-950/80 border border-cyan-500/40 text-cyan-300 text-xs font-mono shadow-[0_0_20px_rgba(6,182,212,0.25)]"
+            >
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
               <span>NEXT-GEN HYPERSCALE GEOSPATIAL DATA-AS-A-SERVICE (GDaaS)</span>
-            </div>
+            </motion.div>
 
-            <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold font-mono text-white tracking-tight leading-tight">
-              The Space-to-Cloud <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-teal-300 to-emerald-400">Translation Layer</span> for Aerospace Data
-            </h1>
+            {/* Main Headline with Dynamic Typing Effect */}
+            <motion.h1
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.2 }}
+              className="text-3xl sm:text-5xl lg:text-6xl font-extrabold font-mono text-white tracking-tight leading-tight min-h-[120px] sm:min-h-[140px]"
+            >
+              The Space-to-Cloud{' '}
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-teal-300 to-emerald-400">
+                {typedText}
+              </span>
+              <span className="inline-block w-1.5 sm:w-2 h-7 sm:h-12 bg-cyan-400 ml-1.5 align-middle animate-pulse shadow-[0_0_12px_#06b6d4]"></span>
+              <br />
+              <span className="text-slate-200">for Aerospace Data</span>
+            </motion.h1>
 
-            <p className="text-base sm:text-lg text-slate-300 leading-relaxed font-sans max-w-3xl">
+            <motion.p
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.35 }}
+              className="text-base sm:text-lg text-slate-300 leading-relaxed font-sans max-w-3xl"
+            >
               Major cloud providers build the antennas. <strong className="text-white font-semibold">GaganDrishti sits inside their big data centers</strong>—ingesting raw satellite downlinks the millisecond they arrive, executing petabyte-scale compute at the data source, and delivering instant, clean intelligence APIs directly into enterprise data lakes.
-            </p>
+            </motion.p>
 
-            {/* Strategic Value Badges */}
-            <div className="flex flex-wrap gap-3 pt-2">
+            {/* Real-time Telemetry Live Ticker Bar */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.5, delay: 0.45 }}
+              className="flex flex-wrap items-center gap-3 py-2 px-4 rounded-xl bg-[#080d1e]/90 border border-cyan-900/60 font-mono text-xs shadow-inner"
+            >
+              <div className="flex items-center gap-1.5 text-emerald-400">
+                <Activity className="w-3.5 h-3.5 animate-pulse" />
+                <span className="text-slate-400">INGESTION:</span>
+                <span className="font-bold">&lt; 12ms LATENCY</span>
+              </div>
+              <div className="h-3 w-[1px] bg-cyan-900/80 hidden sm:block"></div>
+              <div className="flex items-center gap-1.5 text-cyan-300">
+                <Radio className="w-3.5 h-3.5" />
+                <span className="text-slate-400">GROUND STATIONS:</span>
+                <span className="font-bold">AWS & AZURE CO-LOCATED</span>
+              </div>
+              <div className="h-3 w-[1px] bg-cyan-900/80 hidden sm:block"></div>
+              <div className="flex items-center gap-1.5 text-amber-300">
+                <Database className="w-3.5 h-3.5" />
+                <span className="text-slate-400">EGRESS SAVINGS:</span>
+                <span className="font-bold">99.98% DATA REDUCTION</span>
+              </div>
+            </motion.div>
+
+            {/* Strategic Value Badges & CTAs */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.55 }}
+              className="flex flex-wrap gap-3 pt-2"
+            >
               <button
                 onClick={() => onLaunchDashboard(selectedPreset)}
-                className="flex items-center gap-2 bg-gradient-to-r from-cyan-500 to-emerald-400 hover:from-cyan-400 hover:to-emerald-300 text-black font-bold font-mono text-sm px-6 py-3.5 rounded-xl shadow-[0_0_30px_rgba(6,182,212,0.5)] transition-all transform hover:scale-105 active:scale-95 uppercase tracking-wider"
+                className="flex items-center gap-2 bg-gradient-to-r from-cyan-500 to-emerald-400 hover:from-cyan-400 hover:to-emerald-300 text-black font-bold font-mono text-sm px-6 py-3.5 rounded-xl shadow-[0_0_30px_rgba(6,182,212,0.5)] transition-all transform hover:scale-105 active:scale-95 uppercase tracking-wider cursor-pointer"
               >
                 <Zap className="w-4 h-4 fill-black" />
                 ENTER MISSION COMMAND CONSOLE
@@ -230,63 +334,68 @@ export default function LandingPage({ onLaunchDashboard }: LandingPageProps) {
 
               <a
                 href="#enterprise-api"
-                className="flex items-center gap-2 bg-[#080d1e] hover:bg-[#0c142e] border border-cyan-800/60 text-cyan-300 font-mono text-sm px-6 py-3.5 rounded-xl transition-all shadow"
+                className="flex items-center gap-2 bg-[#080d1e] hover:bg-[#0c142e] border border-cyan-800/60 hover:border-cyan-500 text-cyan-300 font-mono text-sm px-6 py-3.5 rounded-xl transition-all shadow"
               >
                 <Code2 className="w-4 h-4" />
                 EXPLORE GDaaS API SUITE
               </a>
-            </div>
+            </motion.div>
           </div>
 
-          {/* 4 Core Pillars Overview Cards */}
+          {/* 4 Core Pillars Overview Cards with Staggered On-Load Animation */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-6">
-            <div className="bg-[#080d1e] border border-cyan-950 hover:border-cyan-800/80 p-5 rounded-2xl transition-all space-y-3 relative overflow-hidden group">
-              <div className="w-10 h-10 rounded-xl bg-cyan-950/80 border border-cyan-800 flex items-center justify-center text-cyan-400 group-hover:scale-110 transition-transform">
-                <Cloud className="w-5 h-5" />
-              </div>
-              <h3 className="font-mono text-base font-bold text-white group-hover:text-cyan-300 transition-colors">
-                1. Space-to-Cloud Hook
-              </h3>
-              <p className="text-xs text-slate-400 font-sans leading-relaxed">
-                Co-located at AWS Ground Station & Azure Orbital endpoints. Ingests raw downlink streams directly without building costly physical antenna dishes.
-              </p>
-            </div>
-
-            <div className="bg-[#080d1e] border border-cyan-950 hover:border-cyan-800/80 p-5 rounded-2xl transition-all space-y-3 relative overflow-hidden group">
-              <div className="w-10 h-10 rounded-xl bg-cyan-950/80 border border-cyan-800 flex items-center justify-center text-emerald-400 group-hover:scale-110 transition-transform">
-                <Database className="w-5 h-5" />
-              </div>
-              <h3 className="font-mono text-base font-bold text-white group-hover:text-emerald-300 transition-colors">
-                2. Zero Data Gravity
-              </h3>
-              <p className="text-xs text-slate-400 font-sans leading-relaxed">
-                Brings compute directly to petabyte datasets inside the data center. Clients query massive spatial indexes and receive lightweight insights in milliseconds.
-              </p>
-            </div>
-
-            <div className="bg-[#080d1e] border border-cyan-950 hover:border-cyan-800/80 p-5 rounded-2xl transition-all space-y-3 relative overflow-hidden group">
-              <div className="w-10 h-10 rounded-xl bg-cyan-950/80 border border-cyan-800 flex items-center justify-center text-amber-400 group-hover:scale-110 transition-transform">
-                <Building2 className="w-5 h-5" />
-              </div>
-              <h3 className="font-mono text-base font-bold text-white group-hover:text-amber-300 transition-colors">
-                3. Enterprise B2B Layer
-              </h3>
-              <p className="text-xs text-slate-400 font-sans leading-relaxed">
-                The translation layer for corporate data lakes in agriculture, mining, maritime & defense. Automated morning API pings fuel internal BI systems.
-              </p>
-            </div>
-
-            <div className="bg-[#080d1e] border border-cyan-950 hover:border-cyan-800/80 p-5 rounded-2xl transition-all space-y-3 relative overflow-hidden group">
-              <div className="w-10 h-10 rounded-xl bg-cyan-950/80 border border-cyan-800 flex items-center justify-center text-purple-400 group-hover:scale-110 transition-transform">
-                <Network className="w-5 h-5" />
-              </div>
-              <h3 className="font-mono text-base font-bold text-white group-hover:text-purple-300 transition-colors">
-                4. Cloud-Native Stack
-              </h3>
-              <p className="text-xs text-slate-400 font-sans leading-relaxed">
-                Distributed object storage (S3/Blob), Cloud-Optimized GeoTIFFs (COGs), Kubernetes SGP4 clusters, and low-latency gRPC/REST delivery.
-              </p>
-            </div>
+            {[
+              {
+                icon: Cloud,
+                iconColor: 'text-cyan-400',
+                title: '1. Space-to-Cloud Hook',
+                hoverColor: 'group-hover:text-cyan-300',
+                desc: 'Co-located at AWS Ground Station & Azure Orbital endpoints. Ingests raw downlink streams directly without building costly physical antenna dishes.'
+              },
+              {
+                icon: Database,
+                iconColor: 'text-emerald-400',
+                title: '2. Zero Data Gravity',
+                hoverColor: 'group-hover:text-emerald-300',
+                desc: 'Brings compute directly to petabyte datasets inside the data center. Clients query massive spatial indexes and receive lightweight insights in milliseconds.'
+              },
+              {
+                icon: Building2,
+                iconColor: 'text-amber-400',
+                title: '3. Enterprise B2B Layer',
+                hoverColor: 'group-hover:text-amber-300',
+                desc: 'The translation layer for corporate data lakes in agriculture, mining, maritime & defense. Automated morning API pings fuel internal BI systems.'
+              },
+              {
+                icon: Network,
+                iconColor: 'text-purple-400',
+                title: '4. Cloud-Native Stack',
+                hoverColor: 'group-hover:text-purple-300',
+                desc: 'Distributed object storage (S3/Blob), Cloud-Optimized GeoTIFFs (COGs), Kubernetes SGP4 clusters, and low-latency gRPC/REST delivery.'
+              }
+            ].map((pillar, i) => {
+              const IconComponent = pillar.icon;
+              return (
+                <motion.div
+                  key={pillar.title}
+                  initial={{ opacity: 0, y: 25 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, delay: 0.65 + i * 0.1 }}
+                  whileHover={{ y: -4, borderColor: 'rgba(6, 182, 212, 0.6)' }}
+                  className="bg-[#080d1e] border border-cyan-950 p-5 rounded-2xl transition-all space-y-3 relative overflow-hidden group shadow-lg"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-cyan-950/80 border border-cyan-800 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <IconComponent className={`w-5 h-5 ${pillar.iconColor}`} />
+                  </div>
+                  <h3 className={`font-mono text-base font-bold text-white ${pillar.hoverColor} transition-colors`}>
+                    {pillar.title}
+                  </h3>
+                  <p className="text-xs text-slate-400 font-sans leading-relaxed">
+                    {pillar.desc}
+                  </p>
+                </motion.div>
+              );
+            })}
           </div>
         </section>
 

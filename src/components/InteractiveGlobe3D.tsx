@@ -1,18 +1,15 @@
-import React, { useRef, useEffect, useState, useMemo } from 'react';
+import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import * as THREE from 'three';
 import { SatelliteState, ObserverLocation, SatellitePreset } from '../types';
-import { calculateSatelliteState, generateGroundTrack, SATELLITE_PRESETS, DEFAULT_OBSERVER } from '../utils/satelliteCalc';
+import { calculateSatelliteState, generateGroundTrack, SATELLITE_PRESETS, DEFAULT_OBSERVER, WORLD_CONTINENTS } from '../utils/satelliteCalc';
 import {
   Rotate3d,
   Layers,
   Eye,
-  Maximize2,
-  Minimize2,
-  Compass,
   Radio,
-  Sparkles,
   Zap,
-  Globe as GlobeIcon
+  AlertTriangle,
+  RefreshCw
 } from 'lucide-react';
 
 interface InteractiveGlobe3DProps {
@@ -27,6 +24,19 @@ interface InteractiveGlobe3DProps {
   compact?: boolean;
 }
 
+// Helper to test if WebGL is available without crashing the runtime
+function isWebGLAvailable(): boolean {
+  try {
+    const canvas = document.createElement('canvas');
+    return !!(
+      window.WebGLRenderingContext &&
+      (canvas.getContext('webgl2') || canvas.getContext('webgl') || canvas.getContext('experimental-webgl'))
+    );
+  } catch {
+    return false;
+  }
+}
+
 export default function InteractiveGlobe3D({
   currentPreset,
   activeTle1,
@@ -34,11 +44,11 @@ export default function InteractiveGlobe3D({
   satName = 'AstroSat',
   observer,
   simulationTime,
-  onSelectSatellite,
   onLaunchDashboard,
   compact = false
 }: InteractiveGlobe3DProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const fallbackCanvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -49,6 +59,10 @@ export default function InteractiveGlobe3D({
   const earthMeshRef = useRef<THREE.Mesh | null>(null);
   const cloudsMeshRef = useRef<THREE.Mesh | null>(null);
   const beamMeshRef = useRef<THREE.Mesh | null>(null);
+
+  // WebGL error/fallback state
+  const [webglError, setWebglError] = useState<boolean>(false);
+  const [retryKey, setRetryKey] = useState<number>(0);
 
   // Active satellite TLE strings
   const currentTle1 = activeTle1 || currentPreset?.line1 || SATELLITE_PRESETS[0].line1;
@@ -61,8 +75,6 @@ export default function InteractiveGlobe3D({
   const [showStations, setShowStations] = useState<boolean>(true);
   const [showSensorCone, setShowSensorCone] = useState<boolean>(true);
   const [isRotating, setIsRotating] = useState<boolean>(true);
-  const [hoveredObject, setHoveredObject] = useState<string | null>(null);
-  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
 
   // Synchronous telemetry for HUD display without setState loops
   const simTimeMs = simulationTime ? simulationTime.getTime() : null;
@@ -249,44 +261,52 @@ export default function InteractiveGlobe3D({
     const panelMat = new THREE.MeshStandardMaterial({
       color: 0x1e3a8a, // Dark blue solar cell
       metalness: 0.9,
-      roughness: 0.2,
-      emissive: 0x1e40af,
-      emissiveIntensity: 0.3
+      roughness: 0.1,
+      emissive: 0x0f172a,
+      emissiveIntensity: 0.4
     });
 
     // Left Wing
     const leftPanel = new THREE.Mesh(panelGeo, panelMat);
-    leftPanel.position.set(-4.8, 0, 0);
+    leftPanel.position.set(-5, 0, 0);
     group.add(leftPanel);
+
+    // Left Boom
+    const boomGeo = new THREE.CylinderGeometry(0.15, 0.15, 2, 8);
+    const boomMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.9 });
+    const leftBoom = new THREE.Mesh(boomGeo, boomMat);
+    leftBoom.rotation.z = Math.PI / 2;
+    leftBoom.position.set(-1.8, 0, 0);
+    group.add(leftBoom);
 
     // Right Wing
     const rightPanel = new THREE.Mesh(panelGeo, panelMat);
-    rightPanel.position.set(4.8, 0, 0);
+    rightPanel.position.set(5, 0, 0);
     group.add(rightPanel);
 
-    // Solar Panel Boom Connections
-    const boomGeo = new THREE.CylinderGeometry(0.15, 0.15, 2, 8);
-    const boomMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.8 });
-    const leftBoom = new THREE.Mesh(boomGeo, boomMat);
-    leftBoom.rotation.z = Math.PI / 2;
-    leftBoom.position.set(-2.5, 0, 0);
-    group.add(leftBoom);
-
+    // Right Boom
     const rightBoom = new THREE.Mesh(boomGeo, boomMat);
     rightBoom.rotation.z = Math.PI / 2;
-    rightBoom.position.set(2.5, 0, 0);
+    rightBoom.position.set(1.8, 0, 0);
     group.add(rightBoom);
 
-    // Thruster Nozzle at Back
-    const thrusterGeo = new THREE.ConeGeometry(0.5, 1, 12);
-    const thrusterMat = new THREE.MeshStandardMaterial({ color: 0x475569, metalness: 0.9 });
-    const thruster = new THREE.Mesh(thrusterGeo, thrusterMat);
-    thruster.position.set(0, 0, -1.8);
-    thruster.rotation.x = -Math.PI / 2;
-    group.add(thruster);
+    // RCS Thruster Nozzles
+    const thrusterGeo = new THREE.ConeGeometry(0.3, 0.6, 8);
+    const thrusterMat = new THREE.MeshBasicMaterial({ color: 0x64748b });
+    const thruster1 = new THREE.Mesh(thrusterGeo, thrusterMat);
+    thruster1.position.set(0, 0, -1.8);
+    thruster1.rotation.x = Math.PI / 2;
+    group.add(thruster1);
 
-    // Thruster Plasma Glow Beacon
-    const glowGeo = new THREE.SphereGeometry(0.25, 8, 8);
+    // Pulsing Navigation Beacon LED
+    const beaconGeo = new THREE.SphereGeometry(0.35, 8, 8);
+    const beaconMat = new THREE.MeshBasicMaterial({ color: 0x34d399 });
+    const beacon = new THREE.Mesh(beaconGeo, beaconMat);
+    beacon.position.set(0, 0, 1.8);
+    group.add(beacon);
+
+    // Blue Thruster Plume Glow Effect
+    const glowGeo = new THREE.SphereGeometry(0.5, 8, 8);
     const glowMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
     const glow = new THREE.Mesh(glowGeo, glowMat);
     glow.position.set(0, 0, -2.4);
@@ -297,31 +317,69 @@ export default function InteractiveGlobe3D({
     return group;
   };
 
-  // Main Three.js Lifecycle
+  // Main Three.js Lifecycle with Safe WebGL Recovery & Context Loss Guarding
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
-    // Scene
-    const scene = new THREE.Scene();
-    sceneRef.current = scene;
+    // 1. Initial WebGL Availability Check
+    if (!isWebGLAvailable()) {
+      console.warn('WebGL is not available or blocked in this environment. Falling back to 2D Orbital Map mode.');
+      setWebglError(true);
+      return;
+    }
 
-    // Camera
-    const aspect = container.clientWidth / container.clientHeight;
-    const camera = new THREE.PerspectiveCamera(45, aspect, 0.1, 2000);
-    cameraRef.current = camera;
-    camera.position.set(160, 100, 160);
-    camera.lookAt(0, 0, 0);
+    let renderer: THREE.WebGLRenderer | null = null;
+    let scene: THREE.Scene | null = null;
+    let camera: THREE.PerspectiveCamera | null = null;
 
-    // Renderer
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
-    rendererRef.current = renderer;
-    renderer.setSize(container.clientWidth, container.clientHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.2;
-    container.innerHTML = '';
-    container.appendChild(renderer.domElement);
+    try {
+      // Scene
+      scene = new THREE.Scene();
+      sceneRef.current = scene;
+
+      // Camera
+      const width = container.clientWidth || 600;
+      const height = container.clientHeight || 400;
+      const aspect = width / height;
+      camera = new THREE.PerspectiveCamera(45, aspect, 0.1, 2000);
+      cameraRef.current = camera;
+      camera.position.set(160, 100, 160);
+      camera.lookAt(0, 0, 0);
+
+      // Safe Renderer Instantiation with fallback catching
+      renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        alpha: true,
+        powerPreference: 'default',
+        failIfMajorPerformanceCaveat: false
+      });
+
+      rendererRef.current = renderer;
+      renderer.setSize(width, height);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.2;
+
+      container.innerHTML = '';
+      container.appendChild(renderer.domElement);
+      setWebglError(false);
+    } catch (err) {
+      console.warn('Error during WebGLRenderer initialization:', err);
+      setWebglError(true);
+      return;
+    }
+
+    // Context loss handler
+    const handleContextLost = (e: Event) => {
+      e.preventDefault();
+      console.warn('WebGL context lost. Activating 2D high-efficiency projection fallback.');
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      setWebglError(true);
+    };
+
+    const dom = renderer.domElement;
+    dom.addEventListener('webglcontextlost', handleContextLost, false);
 
     // Ambient & Directional Lighting
     const ambientLight = new THREE.AmbientLight(0x0c213b, 1.2);
@@ -355,13 +413,10 @@ export default function InteractiveGlobe3D({
 
       const colorChoice = Math.random();
       if (colorChoice > 0.8) {
-        // Cyan star
         starColors[i] = 0.2; starColors[i + 1] = 0.8; starColors[i + 2] = 1.0;
       } else if (colorChoice > 0.6) {
-        // Emerald star
         starColors[i] = 0.2; starColors[i + 1] = 0.9; starColors[i + 2] = 0.6;
       } else {
-        // White/Blue star
         starColors[i] = 0.9; starColors[i + 1] = 0.95; starColors[i + 2] = 1.0;
       }
     }
@@ -442,7 +497,6 @@ export default function InteractiveGlobe3D({
 
     isroStations.forEach((st) => {
       const pos = latLonAltToVector3(st.lat, st.lon, 0, earthRadius);
-      // Pin Pole
       const pinGeo = new THREE.CylinderGeometry(0.4, 0.4, 4, 8);
       const pinMat = new THREE.MeshBasicMaterial({ color: 0x10b981 });
       const pin = new THREE.Mesh(pinGeo, pinMat);
@@ -450,7 +504,6 @@ export default function InteractiveGlobe3D({
       pin.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), pos.clone().normalize());
       stationsGroup.add(pin);
 
-      // Glowing Ground Radar Dish Dot
       const dotGeo = new THREE.SphereGeometry(1.2, 8, 8);
       const dotMat = new THREE.MeshBasicMaterial({ color: 0x34d399 });
       const dot = new THREE.Mesh(dotGeo, dotMat);
@@ -504,7 +557,6 @@ export default function InteractiveGlobe3D({
       cameraRotationRef.current.radius = Math.max(130, Math.min(450, cameraRotationRef.current.radius + e.deltaY * 0.2));
     };
 
-    const dom = renderer.domElement;
     dom.addEventListener('mousedown', handleMouseDown);
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
@@ -515,6 +567,7 @@ export default function InteractiveGlobe3D({
       if (!container || !rendererRef.current || !cameraRef.current) return;
       const w = container.clientWidth;
       const h = container.clientHeight;
+      if (w === 0 || h === 0) return;
       cameraRef.current.aspect = w / h;
       cameraRef.current.updateProjectionMatrix();
       rendererRef.current.setSize(w, h);
@@ -552,7 +605,6 @@ export default function InteractiveGlobe3D({
           cameraRef.current.position.copy(satPos.clone().add(satNormal.multiplyScalar(35)).add(new THREE.Vector3(10, 10, 10)));
           cameraRef.current.lookAt(satPos);
         } else if (cameraMode === 'station') {
-          // Look up from Bengaluru ISTRAC
           const stationPos = latLonAltToVector3(13.03, 77.51, 0, earthRadius);
           cameraRef.current.position.copy(stationPos.clone().multiplyScalar(1.05));
           if (satelliteMeshRef.current) {
@@ -569,7 +621,12 @@ export default function InteractiveGlobe3D({
       }
 
       if (rendererRef.current && sceneRef.current && cameraRef.current) {
-        rendererRef.current.render(sceneRef.current, cameraRef.current);
+        try {
+          rendererRef.current.render(sceneRef.current, cameraRef.current);
+        } catch {
+          // If rendering fails due to context loss
+          setWebglError(true);
+        }
       }
     };
 
@@ -581,13 +638,46 @@ export default function InteractiveGlobe3D({
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
       dom.removeEventListener('wheel', handleWheel);
+      dom.removeEventListener('webglcontextlost', handleContextLost);
       resizeObserver.disconnect();
-      renderer.dispose();
+
+      // Exhaustive Three.js GPU memory cleanup
+      try {
+        if (sceneRef.current) {
+          sceneRef.current.traverse((object) => {
+            if ((object as THREE.Mesh).isMesh) {
+              const mesh = object as THREE.Mesh;
+              if (mesh.geometry) mesh.geometry.dispose();
+              if (mesh.material) {
+                if (Array.isArray(mesh.material)) {
+                  mesh.material.forEach((m) => m.dispose());
+                } else {
+                  mesh.material.dispose();
+                }
+              }
+            }
+          });
+        }
+        if (renderer) {
+          renderer.dispose();
+          renderer.forceContextLoss();
+          if (renderer.domElement && renderer.domElement.parentElement) {
+            renderer.domElement.parentElement.removeChild(renderer.domElement);
+          }
+        }
+      } catch (e) {
+        console.warn('Safe cleanup of WebGL context', e);
+      }
+
+      rendererRef.current = null;
+      sceneRef.current = null;
+      cameraRef.current = null;
     };
-  }, []);
+  }, [retryKey, isRotating, cameraMode]);
 
   // Update Dynamic Orbit Trajectory Line and Satellite Mesh in Three.js
   useEffect(() => {
+    if (webglError) return;
     const scene = sceneRef.current;
     if (!scene) return;
 
@@ -643,17 +733,186 @@ export default function InteractiveGlobe3D({
     } catch (err) {
       console.error('Error updating 3D orbit trajectory', err);
     }
-  }, [currentTle1, currentTle2, simTimeMs, activeObserver.lat, activeObserver.lon, activeObserver.alt, showOrbit]);
+  }, [currentTle1, currentTle2, simTimeMs, activeObserver.lat, activeObserver.lon, activeObserver.alt, showOrbit, webglError]);
 
   // Handle visibility toggles
   useEffect(() => {
+    if (webglError) return;
     if (groundStationMeshRef.current) {
       groundStationMeshRef.current.visible = showStations;
     }
     if (beamMeshRef.current) {
       beamMeshRef.current.visible = showSensorCone;
     }
-  }, [showStations, showSensorCone]);
+  }, [showStations, showSensorCone, webglError]);
+
+  // 2D High-Performance Canvas Fallback Renderer Loop
+  useEffect(() => {
+    if (!webglError) return;
+    const canvas = fallbackCanvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let animId: number;
+
+    const render2DFallback = () => {
+      const w = canvas.width;
+      const h = canvas.height;
+      if (w === 0 || h === 0) return;
+
+      // Clear dark cosmic background
+      ctx.fillStyle = '#050714';
+      ctx.fillRect(0, 0, w, h);
+
+      // Starfield background
+      ctx.fillStyle = 'rgba(6, 182, 212, 0.4)';
+      for (let i = 0; i < 50; i++) {
+        const x = (Math.sin(i * 32.1) * 0.5 + 0.5) * w;
+        const y = (Math.cos(i * 74.3) * 0.5 + 0.5) * h;
+        ctx.fillRect(x, y, 1.5, 1.5);
+      }
+
+      // Draw Grid Lines
+      ctx.strokeStyle = 'rgba(6, 182, 212, 0.08)';
+      ctx.lineWidth = 1;
+      for (let lat = -80; lat <= 80; lat += 20) {
+        const y = ((90 - lat) / 180) * h;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+      }
+      for (let lon = -180; lon <= 180; lon += 30) {
+        const x = ((lon + 180) / 360) * w;
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, h);
+        ctx.stroke();
+      }
+
+      // Draw Continents in Cyber Style
+      ctx.strokeStyle = 'rgba(6, 182, 212, 0.4)';
+      ctx.fillStyle = 'rgba(6, 182, 212, 0.08)';
+      ctx.lineWidth = 1.2;
+
+      WORLD_CONTINENTS.forEach((continent) => {
+        ctx.beginPath();
+        continent.forEach(([lon, lat], idx) => {
+          const x = ((lon + 180) / 360) * w;
+          const y = ((90 - lat) / 180) * h;
+          if (idx === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        });
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      });
+
+      // Ground stations
+      if (showStations) {
+        const isroStations = [
+          { name: 'ISTRAC', lat: 13.03, lon: 77.51 },
+          { name: 'SDSC', lat: 13.72, lon: 80.23 },
+          { name: 'SAC', lat: 23.03, lon: 72.51 },
+          { name: 'Bharati', lat: -69.41, lon: 76.19 }
+        ];
+
+        isroStations.forEach((st) => {
+          const x = ((st.lon + 180) / 360) * w;
+          const y = ((90 - st.lat) / 180) * h;
+
+          ctx.fillStyle = '#10b981';
+          ctx.beginPath();
+          ctx.arc(x, y, 3.5, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = '#6ee7b7';
+          ctx.font = '9px monospace';
+          ctx.fillText(st.name, x + 6, y + 3);
+        });
+      }
+
+      // Draw Ground Track / Orbit
+      if (showOrbit && currentTle1 && currentTle2) {
+        const effTime = simulationTime || new Date();
+        const track = generateGroundTrack(currentTle1, currentTle2, effTime, 95);
+
+        ctx.strokeStyle = 'rgba(6, 182, 212, 0.7)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 4]);
+
+        ctx.beginPath();
+        let first = true;
+        let lastX = 0;
+
+        track.forEach((pt) => {
+          const x = ((pt.lon + 180) / 360) * w;
+          const y = ((90 - pt.lat) / 180) * h;
+
+          if (first) {
+            ctx.moveTo(x, y);
+            first = false;
+          } else {
+            // Check for wrap-around
+            if (Math.abs(x - lastX) < w * 0.4) {
+              ctx.lineTo(x, y);
+            } else {
+              ctx.moveTo(x, y);
+            }
+          }
+          lastX = x;
+        });
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      // Draw Satellite Position
+      if (currentSatState) {
+        const satX = ((currentSatState.lon + 180) / 360) * w;
+        const satY = ((90 - currentSatState.lat) / 180) * h;
+
+        // Sensor footprint circle
+        if (showSensorCone) {
+          ctx.fillStyle = 'rgba(6, 182, 212, 0.15)';
+          ctx.strokeStyle = 'rgba(6, 182, 212, 0.5)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.arc(satX, satY, 35, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        }
+
+        // Glowing Satellite Marker
+        ctx.fillStyle = '#22d3ee';
+        ctx.shadowColor = '#06b6d4';
+        ctx.shadowBlur = 12;
+        ctx.beginPath();
+        ctx.arc(satX, satY, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        // Label
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 11px monospace';
+        ctx.fillText(satName || 'Satellite', satX + 8, satY - 4);
+      }
+
+      animId = requestAnimationFrame(render2DFallback);
+    };
+
+    render2DFallback();
+
+    return () => {
+      if (animId) cancelAnimationFrame(animId);
+    };
+  }, [webglError, currentSatState, showOrbit, showStations, showSensorCone, currentTle1, currentTle2, satName, simulationTime]);
+
+  const handleRetryWebgl = useCallback(() => {
+    setWebglError(false);
+    setRetryKey((prev) => prev + 1);
+  }, []);
 
   return (
     <div
@@ -662,7 +921,34 @@ export default function InteractiveGlobe3D({
       } rounded-2xl overflow-hidden bg-gradient-to-b from-[#060813] via-[#02040a] to-[#050914] border border-cyan-900/40 shadow-[0_0_50px_rgba(6,182,212,0.12)] group`}
     >
       {/* 3D WebGL Canvas Container */}
-      <div ref={containerRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
+      {!webglError ? (
+        <div ref={containerRef} className="w-full h-full cursor-grab active:cursor-grabbing" />
+      ) : (
+        /* High-Performance 2D Projection Fallback */
+        <div className="w-full h-full relative">
+          <canvas
+            ref={fallbackCanvasRef}
+            width={900}
+            height={500}
+            className="w-full h-full object-cover"
+          />
+          {/* Safe Mode Indicator Badge */}
+          <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
+            <div className="flex items-center gap-2 bg-[#0a0f1d]/90 backdrop-blur-md px-3 py-1.5 rounded-lg border border-amber-500/40 text-amber-300 font-mono text-[11px]">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+              <span>2D PROJECTION MODE</span>
+            </div>
+            <button
+              onClick={handleRetryWebgl}
+              className="flex items-center gap-1.5 bg-cyan-950/90 hover:bg-cyan-900 text-cyan-300 border border-cyan-700/60 px-3 py-1.5 rounded-lg font-mono text-[11px] transition-all shadow cursor-pointer"
+              title="Attempt to restart 3D WebGL rendering engine"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-cyan-400" />
+              <span>RETRY 3D WEBGL</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Top Left HUD Telemetry Overlay */}
       <div className="absolute top-4 left-4 z-10 pointer-events-none flex flex-col gap-2">
@@ -672,7 +958,7 @@ export default function InteractiveGlobe3D({
             {satName || currentPreset?.name || 'AstroSat'}
           </span>
           <span className="text-[10px] bg-cyan-950/80 px-2 py-0.5 rounded text-cyan-400 font-mono border border-cyan-800/60">
-            3D ORBIT TRACKER
+            {webglError ? '2D ASTRODYNAMICS TRACKER' : '3D ORBIT TRACKER'}
           </span>
         </div>
 
@@ -696,56 +982,58 @@ export default function InteractiveGlobe3D({
         )}
       </div>
 
-      {/* Top Right Quick Controls */}
-      <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
-        <div className="bg-[#080d1e]/90 backdrop-blur-md p-1 rounded-lg border border-cyan-900/50 flex items-center gap-1 shadow-lg">
+      {/* Top Right Quick Controls (when WebGL is active) */}
+      {!webglError && (
+        <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
+          <div className="bg-[#080d1e]/90 backdrop-blur-md p-1 rounded-lg border border-cyan-900/50 flex items-center gap-1 shadow-lg">
+            <button
+              onClick={() => setCameraMode('orbit')}
+              title="Global Orbit Camera"
+              className={`px-2.5 py-1.5 rounded text-[11px] font-mono transition-all ${
+                cameraMode === 'orbit'
+                  ? 'bg-cyan-500 text-black font-bold shadow-[0_0_10px_rgba(6,182,212,0.4)]'
+                  : 'text-cyan-400 hover:bg-cyan-950/60'
+              }`}
+            >
+              GLOBAL
+            </button>
+            <button
+              onClick={() => setCameraMode('satellite')}
+              title="Focus Satellite POV"
+              className={`px-2.5 py-1.5 rounded text-[11px] font-mono transition-all ${
+                cameraMode === 'satellite'
+                  ? 'bg-cyan-500 text-black font-bold shadow-[0_0_10px_rgba(6,182,212,0.4)]'
+                  : 'text-cyan-400 hover:bg-cyan-950/60'
+              }`}
+            >
+              SPACECRAFT
+            </button>
+            <button
+              onClick={() => setCameraMode('station')}
+              title="Ground Station Point of View (Bengaluru)"
+              className={`px-2.5 py-1.5 rounded text-[11px] font-mono transition-all ${
+                cameraMode === 'station'
+                  ? 'bg-cyan-500 text-black font-bold shadow-[0_0_10px_rgba(6,182,212,0.4)]'
+                  : 'text-cyan-400 hover:bg-cyan-950/60'
+              }`}
+            >
+              GROUND STA
+            </button>
+          </div>
+
           <button
-            onClick={() => setCameraMode('orbit')}
-            title="Global Orbit Camera"
-            className={`px-2.5 py-1.5 rounded text-[11px] font-mono transition-all ${
-              cameraMode === 'orbit'
-                ? 'bg-cyan-500 text-black font-bold shadow-[0_0_10px_rgba(6,182,212,0.4)]'
-                : 'text-cyan-400 hover:bg-cyan-950/60'
+            onClick={() => setIsRotating(!isRotating)}
+            title={isRotating ? 'Pause Earth Auto-spin' : 'Resume Earth Auto-spin'}
+            className={`p-2 rounded-lg border backdrop-blur-md text-xs font-mono transition-all ${
+              isRotating
+                ? 'bg-emerald-950/50 border-emerald-500/50 text-emerald-300'
+                : 'bg-slate-900/70 border-slate-700 text-slate-400'
             }`}
           >
-            GLOBAL
-          </button>
-          <button
-            onClick={() => setCameraMode('satellite')}
-            title="Focus Satellite POV"
-            className={`px-2.5 py-1.5 rounded text-[11px] font-mono transition-all ${
-              cameraMode === 'satellite'
-                ? 'bg-cyan-500 text-black font-bold shadow-[0_0_10px_rgba(6,182,212,0.4)]'
-                : 'text-cyan-400 hover:bg-cyan-950/60'
-            }`}
-          >
-            SPACECRAFT
-          </button>
-          <button
-            onClick={() => setCameraMode('station')}
-            title="Ground Station Point of View (Bengaluru)"
-            className={`px-2.5 py-1.5 rounded text-[11px] font-mono transition-all ${
-              cameraMode === 'station'
-                ? 'bg-cyan-500 text-black font-bold shadow-[0_0_10px_rgba(6,182,212,0.4)]'
-                : 'text-cyan-400 hover:bg-cyan-950/60'
-            }`}
-          >
-            GROUND STA
+            <Rotate3d className={`w-4 h-4 ${isRotating ? 'animate-spin' : ''}`} style={{ animationDuration: '8s' }} />
           </button>
         </div>
-
-        <button
-          onClick={() => setIsRotating(!isRotating)}
-          title={isRotating ? 'Pause Earth Auto-spin' : 'Resume Earth Auto-spin'}
-          className={`p-2 rounded-lg border backdrop-blur-md text-xs font-mono transition-all ${
-            isRotating
-              ? 'bg-emerald-950/50 border-emerald-500/50 text-emerald-300'
-              : 'bg-slate-900/70 border-slate-700 text-slate-400'
-          }`}
-        >
-          <Rotate3d className={`w-4 h-4 ${isRotating ? 'animate-spin' : ''}`} style={{ animationDuration: '8s' }} />
-        </button>
-      </div>
+      )}
 
       {/* Bottom Floating Navigation Toolbar */}
       <div className="absolute bottom-4 left-4 right-4 z-10 flex flex-wrap items-center justify-between gap-2 pointer-events-auto">
@@ -784,7 +1072,7 @@ export default function InteractiveGlobe3D({
         {onLaunchDashboard && (
           <button
             onClick={onLaunchDashboard}
-            className="flex items-center gap-2 bg-gradient-to-r from-cyan-500 to-emerald-400 hover:from-cyan-400 hover:to-emerald-300 text-black font-bold font-mono text-xs px-4 py-2 rounded-xl shadow-[0_0_20px_rgba(6,182,212,0.4)] transition-all transform hover:scale-105 active:scale-95 uppercase tracking-wider"
+            className="flex items-center gap-2 bg-gradient-to-r from-cyan-500 to-emerald-400 hover:from-cyan-400 hover:to-emerald-300 text-black font-bold font-mono text-xs px-4 py-2 rounded-xl shadow-[0_0_20px_rgba(6,182,212,0.4)] transition-all transform hover:scale-105 active:scale-95 uppercase tracking-wider cursor-pointer"
           >
             <Zap className="w-3.5 h-3.5 fill-black" />
             LAUNCH FULL COMMAND CONSOLE
@@ -794,7 +1082,7 @@ export default function InteractiveGlobe3D({
 
       {/* Subtle Bottom Instruction Tip */}
       <div className="absolute bottom-16 left-1/2 -translate-x-1/2 pointer-events-none text-[10px] font-mono text-cyan-600/70 tracking-widest uppercase bg-[#050814]/60 px-3 py-1 rounded-full border border-cyan-950/40 backdrop-blur-xs">
-        DRAG TO ROTATE 3D GLOBE // SCROLL TO ZOOM
+        {!webglError ? 'DRAG TO ROTATE 3D GLOBE // SCROLL TO ZOOM' : '2D HIGH-EFFICIENCY ORBITAL RADAR'}
       </div>
     </div>
   );

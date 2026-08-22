@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import InteractiveGlobe3D from './InteractiveGlobe3D';
+import SolarSystemBackdrop from './SolarSystemBackdrop';
+import GaganDrishtiLogo from './GaganDrishtiLogo';
 import { SatellitePreset, ObserverLocation } from '../types';
 import { SATELLITE_PRESETS } from '../utils/satelliteCalc';
 import {
@@ -51,10 +53,10 @@ export default function LandingPage({ onLaunchDashboard }: LandingPageProps) {
   // Dynamic Typewriter Effect for Hero Element
   const HERO_TYPEWRITER_PHRASES = [
     "Translation Layer",
-    "Direct Antenna Ingestion",
-    "Zero-Data-Gravity Pipeline",
-    "Enterprise DaaS Engine",
-    "Real-Time SGP4 Astrodynamics"
+    "Direct Ingestion Engine",
+    "Zero-Data-Gravity DaaS",
+    "Astrodynamics Pipeline",
+    "Enterprise Geospatial Sync"
   ];
   const [phraseIdx, setPhraseIdx] = useState<number>(0);
   const [typedText, setTypedText] = useState<string>('');
@@ -211,22 +213,7 @@ export default function LandingPage({ onLaunchDashboard }: LandingPageProps) {
         className="border-b border-cyan-900/40 bg-[#080c1b]/85 backdrop-blur-lg px-6 py-4 flex justify-between items-center sticky top-0 z-30 shadow-lg"
       >
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-cyan-500 to-emerald-400 flex items-center justify-center shadow-[0_0_20px_rgba(6,182,212,0.6)]">
-            <Radio className="w-5 h-5 text-black" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold tracking-wider font-mono uppercase text-white">
-                GAGAN<span className="text-cyan-400">DRISHTI</span>
-              </h1>
-              <span className="text-[9px] font-mono font-bold bg-cyan-950 text-cyan-300 px-2 py-0.5 rounded border border-cyan-800">
-                GDaaS
-              </span>
-            </div>
-            <p className="text-[10px] text-cyan-600 uppercase tracking-widest font-mono font-bold">
-              SPACE-TO-CLOUD INFRASTRUCTURE & GEOSPATIAL DATA-AS-A-SERVICE
-            </p>
-          </div>
+          <GaganDrishtiLogo variant="full" size="md" />
         </div>
 
         {/* Quick Nav Links */}
@@ -253,40 +240,44 @@ export default function LandingPage({ onLaunchDashboard }: LandingPageProps) {
       {/* Main Landing Page Content */}
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 md:px-6 py-8 md:py-12 space-y-20 relative z-10">
 
-        {/* HERO SECTION: Strategic Value Proposition with On-Load Motion Animations */}
-        <section className="space-y-8 pt-4">
-          <div className="max-w-4xl space-y-5">
+        {/* HERO SECTION: Strategic Value Proposition with Solar System Quarter Backdrop */}
+        <section className="relative space-y-8 pt-4 pb-2 overflow-hidden rounded-3xl">
+          {/* Vague Quarter Solar System Backdrop anchored to Top Right Corner */}
+          <SolarSystemBackdrop />
+
+          <div className="relative z-10 max-w-4xl space-y-6">
             <motion.div
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.1 }}
-              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-cyan-950/80 border border-cyan-500/40 text-cyan-300 text-xs font-mono shadow-[0_0_20px_rgba(6,182,212,0.25)]"
+              className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-cyan-950/80 border border-cyan-500/40 text-cyan-300 text-xs font-mono shadow-[0_0_20px_rgba(6,182,212,0.25)] backdrop-blur-sm"
             >
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
               <span>NEXT-GEN HYPERSCALE GEOSPATIAL DATA-AS-A-SERVICE (GDaaS)</span>
             </motion.div>
 
-            {/* Main Headline with Dynamic Typing Effect */}
+            {/* Main Headline with Dynamic Typing Effect - Fixed height line container prevents layout shifts */}
             <motion.h1
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.2 }}
-              className="text-3xl sm:text-5xl lg:text-6xl font-extrabold font-mono text-white tracking-tight leading-tight min-h-[120px] sm:min-h-[140px]"
+              className="text-3xl sm:text-5xl lg:text-6xl font-extrabold font-mono text-white tracking-tight leading-tight drop-shadow-[0_4px_16px_rgba(0,0,0,0.8)]"
             >
-              The Space-to-Cloud{' '}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-teal-300 to-emerald-400">
-                {typedText}
-              </span>
-              <span className="inline-block w-1.5 sm:w-2 h-7 sm:h-12 bg-cyan-400 ml-1.5 align-middle animate-pulse shadow-[0_0_12px_#06b6d4]"></span>
-              <br />
-              <span className="text-slate-200">for Aerospace Data</span>
+              <div>The Space-to-Cloud</div>
+              <div className="h-[1.3em] flex items-center overflow-hidden my-1">
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-teal-300 to-emerald-400 whitespace-nowrap">
+                  {typedText}
+                </span>
+                <span className="inline-block w-1.5 sm:w-2 h-[0.85em] bg-cyan-400 ml-1.5 align-middle animate-pulse shadow-[0_0_12px_#06b6d4]"></span>
+              </div>
+              <div className="text-slate-200">for Aerospace Data</div>
             </motion.h1>
 
             <motion.p
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.35 }}
-              className="text-base sm:text-lg text-slate-300 leading-relaxed font-sans max-w-3xl"
+              className="text-base sm:text-lg text-slate-300 leading-relaxed font-sans max-w-3xl drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]"
             >
               Major cloud providers build the antennas. <strong className="text-white font-semibold">GaganDrishti sits inside their big data centers</strong>—ingesting raw satellite downlinks the millisecond they arrive, executing petabyte-scale compute at the data source, and delivering instant, clean intelligence APIs directly into enterprise data lakes.
             </motion.p>
@@ -296,7 +287,7 @@ export default function LandingPage({ onLaunchDashboard }: LandingPageProps) {
               initial={{ opacity: 0, scale: 0.96 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.5, delay: 0.45 }}
-              className="flex flex-wrap items-center gap-3 py-2 px-4 rounded-xl bg-[#080d1e]/90 border border-cyan-900/60 font-mono text-xs shadow-inner"
+              className="flex flex-wrap items-center gap-3 py-2 px-4 rounded-xl bg-[#080d1e]/85 backdrop-blur-md border border-cyan-900/60 font-mono text-xs shadow-inner max-w-fit"
             >
               <div className="flex items-center gap-1.5 text-emerald-400">
                 <Activity className="w-3.5 h-3.5 animate-pulse" />
@@ -334,7 +325,7 @@ export default function LandingPage({ onLaunchDashboard }: LandingPageProps) {
 
               <a
                 href="#enterprise-api"
-                className="flex items-center gap-2 bg-[#080d1e] hover:bg-[#0c142e] border border-cyan-800/60 hover:border-cyan-500 text-cyan-300 font-mono text-sm px-6 py-3.5 rounded-xl transition-all shadow"
+                className="flex items-center gap-2 bg-[#080d1e]/90 hover:bg-[#0c142e] backdrop-blur-sm border border-cyan-800/60 hover:border-cyan-500 text-cyan-300 font-mono text-sm px-6 py-3.5 rounded-xl transition-all shadow"
               >
                 <Code2 className="w-4 h-4" />
                 EXPLORE GDaaS API SUITE
@@ -1153,17 +1144,20 @@ export default function LandingPage({ onLaunchDashboard }: LandingPageProps) {
 
         {/* MISSION LAUNCH BANNER */}
         <section className="bg-gradient-to-r from-cyan-950/60 via-[#0a122c] to-emerald-950/60 border border-cyan-500/40 rounded-2xl p-8 shadow-[0_0_50px_rgba(6,182,212,0.15)] flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="space-y-2 text-center md:text-left">
-            <div className="inline-flex items-center gap-2 text-xs font-mono text-cyan-400">
-              <Radio className="w-3.5 h-3.5" />
-              <span>SWADESHI ORBITAL PLATFORM</span>
+          <div className="flex flex-col sm:flex-row items-center gap-6 text-center sm:text-left">
+            <GaganDrishtiLogo variant="mark" size="lg" className="shrink-0" />
+            <div className="space-y-2">
+              <div className="inline-flex items-center gap-2 text-xs font-mono text-cyan-400">
+                <Radio className="w-3.5 h-3.5" />
+                <span>SWADESHI ORBITAL PLATFORM</span>
+              </div>
+              <h3 className="text-2xl font-bold font-mono text-white">
+                Experience the Live GaganDrishti GDaaS Platform
+              </h3>
+              <p className="text-xs md:text-sm text-slate-300 font-sans max-w-xl">
+                Execute real-time SGP4 orbital propagation, simulate ground passes over ISRO spaceports, analyze polar sky domes, and evaluate sub-second telemetry feeds.
+              </p>
             </div>
-            <h3 className="text-2xl font-bold font-mono text-white">
-              Experience the Live GaganDrishti GDaaS Platform
-            </h3>
-            <p className="text-xs md:text-sm text-slate-300 font-sans max-w-xl">
-              Execute real-time SGP4 orbital propagation, simulate ground passes over ISRO spaceports, analyze polar sky domes, and evaluate sub-second telemetry feeds.
-            </p>
           </div>
 
           <button
@@ -1176,10 +1170,13 @@ export default function LandingPage({ onLaunchDashboard }: LandingPageProps) {
         </section>
       </main>
 
-      {/* Humble footer */}
-      <footer className="border-t border-cyan-900/30 bg-[#0a0c16] px-6 py-6 mt-12 text-center text-xs text-cyan-600 font-mono space-y-2">
-        <div>
-          GAGANDRISHTI SWADESHI SPACE COMMAND WORKSPACE // ISRO GROUND TRACK // UTC {new Date().toISOString().substring(0, 10)}
+      {/* Humble footer with Logo */}
+      <footer className="border-t border-cyan-900/30 bg-[#0a0c16] px-6 py-8 mt-12 text-center text-xs text-cyan-600 font-mono space-y-4">
+        <div className="flex justify-center items-center">
+          <GaganDrishtiLogo variant="horizontal" size="md" />
+        </div>
+        <div className="text-[11px] text-slate-400">
+          SWADESHI SPACE COMMAND WORKSPACE // ISRO GROUND TRACK // UTC {new Date().toISOString().substring(0, 10)}
         </div>
         <div className="text-[11px] text-cyan-400">
           Made with ❤️ by Agnit Dasgupta

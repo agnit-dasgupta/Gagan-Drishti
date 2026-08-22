@@ -6,6 +6,7 @@ import OrientationVisualizer from './components/OrientationVisualizer';
 import { PassPredictor } from './components/PassPredictor';
 import InteractiveGlobe3D from './components/InteractiveGlobe3D';
 import LandingPage from './components/LandingPage';
+import GaganDrishtiLogo from './components/GaganDrishtiLogo';
 import { ObserverLocation, SatelliteState, TleInfo, SatellitePreset } from './types';
 import {
   calculateSatelliteState,
@@ -258,14 +259,14 @@ export default function App() {
         <div className="flex items-center gap-4">
           <button
             onClick={() => setCurrentView('landing')}
-            className="w-8 h-8 rounded bg-cyan-500 hover:bg-cyan-400 flex items-center justify-center shadow-[0_0_15px_rgba(6,182,212,0.5)] transition-transform hover:scale-105"
-            title="Return to 3D Overview"
+            className="hover:scale-105 transition-transform cursor-pointer"
+            title="Return to GaganDrishti Overview"
           >
-            <Radio className="w-5 h-5 text-black animate-pulse" />
+            <GaganDrishtiLogo variant="mark" size="md" />
           </button>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-lg font-bold tracking-tight uppercase">
+              <h1 className="text-lg font-bold tracking-tight uppercase font-mono">
                 GAGAN<span className="text-cyan-400">DRISHTI</span>
               </h1>
               <span className="text-[10px] bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 px-2 py-0.5 rounded font-mono font-bold">
